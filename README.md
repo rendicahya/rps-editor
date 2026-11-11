@@ -41,11 +41,18 @@ Sudah ada:
   - waktu pertemuan dibanding SKS (kuliah n×50 menit, praktikum n×170 menit; "2x50 menit" dan "100 menit" terbaca);
   - Lembar Kerja tanpa judul, asesmen, Sub-CPMK, atau deskripsi.
 
+- **Pustaka Daring** seperti SOP Editor (folder, hak akses per anggota/grup, riwayat, recycle bin, "sedang diedit"),
+  dengan koleksi RPS sendiri; anggota dan grup sama dengan SOP Editor.
+- **Katalog Kurikulum** (tombol **Kurikulum**): CPL dan CPMK per prodi di Pustaka Daring.
+  - Admin menambah/menghapus prodi dan menunjuk **pengelola prodi** (email).
+  - Pengelola prodi (dan admin) mengedit CPL/CPMK prodinya beserta relasi CPMK → CPL.
+  - Semua anggota bisa mencentang CPL/CPMK lalu **Pakai di RPS ini**: disalin ke RPS aktif (satu langkah Undo);
+    CPL yang didukung CPMK terpilih ikut disalin, kode yang sudah ada tidak diduplikasi, prodi/departemen yang
+    masih kosong diisi dari katalog.
+
 Rencana berikutnya:
 1. Seret-lepas untuk mengurutkan baris.
-2. Pustaka Daring (koleksi `rps`, `rpsFolders`, `rpsEditing`).
-4. Katalog kurikulum per prodi (`curricula/{prodiId}`) dengan peran **pengelola prodi**.
-5. Asisten AI: susun RPS baru, impor RPS lama (PDF/Word), revisi.
+2. Asisten AI: susun RPS baru, impor RPS lama (PDF/Word), revisi.
 
 ## Firebase
 
