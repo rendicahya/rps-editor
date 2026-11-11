@@ -13,8 +13,8 @@
     if (!TABS.some(([t]) => t === tab)) tab = 'local';
   });
 
-  // Pustaka Daring untuk RPS (koleksi rps/rpsFolders) belum aktif: aturan Firestore-nya perlu ditambahkan dulu.
-  const FACULTY_READY = false;
+  // Pustaka Daring RPS: koleksi rps/rpsFolders (aturannya di firestore.rules repositori SOP Editor).
+  const FACULTY_READY = true;
   const TABS = [
     ['local', 'Lokal', 'RPS yang disimpan di browser ini'],
     ...(FACULTY_READY ? [['faculty', 'Daring', 'RPS bersama secara daring, untuk anggota fakultas']] : [])

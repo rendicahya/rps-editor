@@ -9,9 +9,9 @@
   import * as ui from './ask.svelte.js';
 
   /**
-   * openIds: id SOP yang sedang terbuka di tab. onopen(sop), onupload(folder): di App.
+   * openIds: id RPS yang sedang terbuka di tab. onopen(sop), onupload(folder): di App.
    * onloaded(live): daftar baru dimuat, tab yang terbuka mengikuti hak akses terbaru. onrenamed(id, hasil renameSop): tab mengikuti.
-   * onbinned(id): tab SOP yang dihapus ditutup; hasilnya true bila tab dipertahankan karena ada perubahan belum tersimpan.
+   * onbinned(id): tab RPS yang dihapus ditutup; hasilnya true bila tab dipertahankan karena ada perubahan belum tersimpan.
    * Panel di dialog Pustaka: open = dialognya terbuka, active = tab Daring yang tampil, host = elemen <dialog>,
    * tabs = pemilih tab di kepala panel, onclose() menutup dialog.
    */
@@ -42,7 +42,7 @@
 
   const admin = $derived(faculty.status === 'in' && faculty.role === 'admin');
 
-  // Tiap kali dialog dibuka, panel ini mulai dari daftar SOP lagi.
+  // Tiap kali dialog dibuka, panel ini mulai dari daftar RPS lagi.
   let wasOpen = false;
   let loaded = $state(false);
   $effect(() => {
@@ -125,7 +125,7 @@
   function folderInfo(f) {
     const subs = childrenOf(f.id).length;
     const n = counts.get(f.id) ?? 0;
-    return [subs && `${subs} folder`, n && `${n} SOP`].filter(Boolean).join(', ') || 'Kosong';
+    return [subs && `${subs} folder`, n && `${n} RPS`].filter(Boolean).join(', ') || 'Kosong';
   }
 
   // ---- Lebar pohon folder (bisa digeser, diingat per browser) ----
@@ -230,8 +230,8 @@
     const subs = childrenOf(f.id).length;
     const sops = live.filter((s) => folderOf(s) === f.id).length;
     if (subs || sops) {
-      const isi = [subs && `${subs} subfolder`, sops && `${sops} SOP`].filter(Boolean).join(' dan ');
-      return ui.alert(`Folder "${f.name}" masih berisi ${isi}. Pindahkan isinya dulu. SOP milik orang lain hanya bisa dipindahkan oleh pemiliknya atau admin.`, { title: 'Folder belum kosong' });
+      const isi = [subs && `${subs} subfolder`, sops && `${sops} RPS`].filter(Boolean).join(' dan ');
+      return ui.alert(`Folder "${f.name}" masih berisi ${isi}. Pindahkan isinya dulu. RPS milik orang lain hanya bisa dipindahkan oleh pemiliknya atau admin.`, { title: 'Folder belum kosong' });
     }
     if (!(await ui.confirm(`Hapus folder "${f.name}"?`, { ok: 'Hapus', danger: true }))) return;
     if (folderId === f.id) folderId = parents.get(f.id) ?? null;
@@ -252,12 +252,12 @@
       if (target) expanded.add(target);
       act(() => F.moveFolder(item, dest), 'Folder dipindahkan');
     } else if (target !== folderOf(item)) {
-      act(() => F.moveSop(item, dest), 'SOP dipindahkan');
+      act(() => F.moveSop(item, dest), 'RPS dipindahkan');
     }
   }
 
   // ---- Seret dan lepas ----
-  // Yang bisa diseret: SOP dan folder yang boleh dipindahkan (pemilik dan admin). Tempat lepas: folder di pohon,
+  // Yang bisa diseret: RPS dan folder yang boleh dipindahkan (pemilik dan admin). Tempat lepas: folder di pohon,
   // breadcrumb, folder di hasil pencarian, dan area daftar (folder yang sedang dibuka).
   let drag = $state(null); // { item, isFolder }
   let dropAt = $state(undefined); // id folder yang sedang disorot; null = Utama
@@ -326,17 +326,17 @@
     await refresh();
   }
 
-  const titleOf = (s) => s.title || 'SOP tanpa judul';
+  const titleOf = (s) => s.title || 'RPS tanpa judul';
   const isOpen = (s) => openIds.includes(s.id);
 
-  /** SOP kosong dibuat di `folder` lalu langsung dibuka di tab baru. */
+  /** RPS kosong dibuat di `folder` lalu langsung dibuka di tab baru. */
   async function newSop(folder = here) {
-    const name = (await ui.prompt('Nama SOP', '', { title: 'SOP baru', ok: 'Buat', maxlength: 300 }))?.trim();
+    const name = (await ui.prompt('Nama RPS', '', { title: 'RPS baru', ok: 'Buat', maxlength: 300 }))?.trim();
     if (!name) return;
     try {
       await oncreate(name, folder);
       onclose();
-      onnotify('SOP baru dibuat');
+      onnotify('RPS baru dibuat');
     } catch (e) {
       ui.alert(e.message);
     }
@@ -348,9 +348,9 @@
   }
 
   async function rename(s) {
-    const name = (await ui.prompt('Nama SOP', s.title, { title: 'Ubah nama SOP', ok: 'Simpan' }))?.trim();
+    const name = (await ui.prompt('Nama RPS', s.title, { title: 'Ubah nama RPS', ok: 'Simpan' }))?.trim();
     if (!name || name === s.title) return;
-    act(async () => onrenamed(s.id, await F.renameSop(s.id, name)), 'Nama SOP diubah');
+    act(async () => onrenamed(s.id, await F.renameSop(s.id, name)), 'Nama RPS diubah');
   }
 
   function moveToBin(s) {
@@ -364,7 +364,7 @@
   const duplicate = (s) => act(() => F.duplicateSop(s), 'Salinan dibuat');
   const moveSop = (s) => (moving = { item: s, isFolder: false, target: folderOf(s) });
   const moveFolder = (f) => (moving = { item: f, isFolder: true, target: parents.get(f.id) ?? null });
-  const restoreFromBin = (s) => act(() => F.restoreFromBin(s.id), 'SOP dipulihkan');
+  const restoreFromBin = (s) => act(() => F.restoreFromBin(s.id), 'RPS dipulihkan');
 
   async function purge(s) {
     const msg = `Hapus "${titleOf(s)}" secara permanen?\n\nSeluruh riwayat versinya, termasuk suntingan orang lain, ikut terhapus. Tindakan ini tidak bisa dibatalkan.`;
@@ -417,7 +417,7 @@
   function hereItems(id) {
     const add = canAdd(id);
     return [
-      { label: 'SOP baru di sini', run: () => newSop(id), disabled: !add },
+      { label: 'RPS baru di sini', run: () => newSop(id), disabled: !add },
       { label: 'Folder baru di sini', run: () => newFolder(id), disabled: !add },
       { label: 'Unggah dokumen ini ke sini', run: () => onupload(id), disabled: !add || !cansave }
     ];
@@ -514,7 +514,7 @@
     adminAct(() => F.setGroupMembers(g.id, on ? [...emails, m.email] : emails, members));
   }
   async function removeMember(m) {
-    if (await ui.confirm(`Cabut akses ${m.email}? SOP buatannya tetap ada.`, { ok: 'Cabut akses', danger: true })) adminAct(() => F.removeMember(m.email));
+    if (await ui.confirm(`Cabut akses ${m.email}? RPS buatannya tetap ada.`, { ok: 'Cabut akses', danger: true })) adminAct(() => F.removeMember(m.email));
   }
   async function changeLimit() {
     const raw = await ui.prompt('Batas penyimpanan (MB)', String(Math.round(usage.limit / 1e6)), { title: 'Ubah batas penyimpanan', ok: 'Simpan', type: 'number' });
@@ -572,12 +572,12 @@
   <header>
     {@render tabs()}
     {#if faculty.status === 'in' && view !== 'admin'}
-      <input class="search" type="search" bind:value={query} placeholder="Cari nama, nomor, pembuat, pelaksana, atau kegiatan…" />
+      <input class="search" type="search" bind:value={query} placeholder="Cari mata kuliah, kode, pembuat, dosen, CPL/CPMK, atau materi…" />
     {:else}
       <span class="grow"></span>
     {/if}
     {#if admin}
-      <button type="button" class="adm" class:on={view === 'admin'} aria-pressed={view === 'admin'} data-tip={view === 'admin' ? 'Kembali ke daftar SOP' : 'Anggota, grup, dan penyimpanan'} onclick={() => (view = view === 'admin' ? 'sops' : 'admin')}>
+      <button type="button" class="adm" class:on={view === 'admin'} aria-pressed={view === 'admin'} data-tip={view === 'admin' ? 'Kembali ke daftar RPS' : 'Anggota, grup, dan penyimpanan'} onclick={() => (view = view === 'admin' ? 'sops' : 'admin')}>
         <Icon name="settings" size={15} /><span>Admin</span>
       </button>
     {/if}
@@ -633,7 +633,7 @@
             {#if here && !searching}
               {@render ib('users', accessTip(byId.get(here)), () => openAccess('folders', byId.get(here)))}
             {/if}
-            {@render ib('filePlus', canAdd(here) ? 'SOP baru di sini' : noAddTip, () => newSop(), { disabled: !canAdd(here) })}
+            {@render ib('filePlus', canAdd(here) ? 'RPS baru di sini' : noAddTip, () => newSop(), { disabled: !canAdd(here) })}
             {@render ib('folderPlus', canAdd(here) ? 'Folder baru di sini' : noAddTip, () => newFolder(), { disabled: !canAdd(here) })}
             {@render ib('upload', uploadTip, () => onupload(here), { disabled: !!uploadBlocked })}
             {@render ib('refresh', 'Muat ulang daftar', refresh)}
@@ -667,7 +667,7 @@
                   </small>
                   {#if editors}<small class="editing">✎ Sedang diedit oleh {editors}</small>{/if}
                 </button>
-                <span class="acts" role="group" aria-label="Tindakan SOP">
+                <span class="acts" role="group" aria-label="Tindakan RPS">
                   {@render ib('copy', 'Duplikat sebagai milik Anda', () => duplicate(s))}
                   {@render ib('history', 'Riwayat', () => toggleHistory(s), { on: history?.id === s.id, expanded: history?.id === s.id })}
                   {@render ib('users', accessTip(s), () => openAccess('sops', s))}
@@ -694,7 +694,7 @@
               </li>
             {/each}
             {#if !shownFolders.length && !shownLive.length}
-              <li class="empty">{busy ? 'Memuat…' : searching ? 'Tidak ada yang cocok.' : here ? 'Folder ini masih kosong.' : 'Belum ada folder atau SOP di sini.'}</li>
+              <li class="empty">{busy ? 'Memuat…' : searching ? 'Tidak ada yang cocok.' : here ? 'Folder ini masih kosong.' : 'Belum ada folder atau RPS di sini.'}</li>
             {/if}
           </ul>
         {:else if view === 'bin'}
@@ -705,7 +705,7 @@
                   <strong><Icon name="file" size={15} /> {titleOf(s)}</strong>
                   <small>{[s.nomor, `dibuat ${s.createdBy === faculty.user.uid ? 'Anda' : s.createdByName}`, `dihapus ${when(s.deletedAt)}`, size(s.totalBytes)].filter(Boolean).join(' · ')}</small>
                 </div>
-                <span class="acts" role="group" aria-label="Tindakan SOP">
+                <span class="acts" role="group" aria-label="Tindakan RPS">
                   {@render ib('restore', 'Pulihkan', () => restoreFromBin(s))}
                   {@render ib('trash', 'Hapus permanen', () => purge(s), { danger: true })}
                 </span>
@@ -722,7 +722,7 @@
             <p class="usage"><strong>{size(usage.bytes)}</strong> dari {size(usage.limit)} terpakai · sisa {size(Math.max(0, usage.limit - usage.bytes))}</p>
             <div class="meter" role="progressbar" aria-valuenow={Math.round(percent)} aria-valuemin="0" aria-valuemax="100"><span style:width="{percent}%"></span></div>
             <small>
-              Perkiraan dari ukuran isi SOP, riwayat, dan Recycle bin. Ruang sebenarnya lebih besar karena indeks Firestore.
+              Perkiraan dari ukuran isi RPS, riwayat, dan Recycle bin. Ruang sebenarnya lebih besar karena indeks Firestore.
               Kuota baca dan tulis harian hanya terlihat di Firebase Console.
             </small>
             <div class="row">
@@ -802,7 +802,7 @@
   {:else}
     <div class="gate">
       {#if faculty.status === 'out'}
-        <p>Pustaka Daring menyimpan SOP bersama secara daring. Masuk dengan akun Google <strong>@ub.ac.id</strong> atau <strong>@gmail.com</strong> yang sudah didaftarkan admin.</p>
+        <p>Pustaka Daring menyimpan RPS bersama secara daring. Masuk dengan akun Google <strong>@ub.ac.id</strong> atau <strong>@gmail.com</strong> yang sudah didaftarkan admin.</p>
         <button class="btn primary" onclick={() => F.signIn().catch((e) => ui.alert(e.message))}>Masuk dengan Google</button>
       {:else if faculty.status === 'domain'}
         <p><strong>{faculty.user.email}</strong> tidak bisa dipakai. Pustaka Daring hanya untuk akun @ub.ac.id atau @gmail.com.</p>

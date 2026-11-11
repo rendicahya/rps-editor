@@ -1,5 +1,15 @@
-// Pustaka Daring: SOP bersama di Firestore. Firebase baru dimuat saat fitur ini dipakai.
-// Batasan akses ditegakkan oleh firebase/firestore.rules; yang di sini hanya mengikuti aturan itu.
+// Pustaka Daring: RPS bersama di Firestore. Firebase baru dimuat saat fitur ini dipakai.
+// Batasan akses ditegakkan oleh firestore.rules di repositori SOP Editor (proyek Firebase yang sama);
+// yang di sini hanya mengikuti aturan itu. Anggota dan grup dipakai bersama SOP Editor, dokumennya terpisah.
+
+/** Koleksi RPS. Kunci `sops`/`folders` dipertahankan karena dipakai sebagai `kind` oleh komponen pustaka. */
+const C = {
+  sops: 'rps',
+  folders: 'rpsFolders',
+  editing: 'rpsEditing',
+  usage: 'stats/rpsUsage',
+  capacity: 'stats/rpsCapacity'
+};
 
 const EMULATOR = import.meta.env.VITE_FIREBASE_EMULATOR;
 
@@ -191,7 +201,7 @@ function cloudJson(doc, title) {
 async function isFull() {
   const { F, db } = await load();
   try {
-    await F.getDocFromServer(F.doc(db, 'stats/capacity'));
+    await F.getDocFromServer(F.doc(db, C.capacity));
     return false;
   } catch (e) {
     return e.code === 'permission-denied';
@@ -210,7 +220,7 @@ async function failed(e) {
 
 async function ensureUsage() {
   const { F, db } = await load();
-  const ref = F.doc(db, 'stats/usage');
+  const ref = F.doc(db, C.usage);
   if (!(await F.getDocFromServer(ref)).exists()) await F.setDoc(ref, { bytes: 0, limit: DEFAULT_LIMIT, lastSop: '' });
 }
 
@@ -227,7 +237,7 @@ function tokenChunks() {
 /** SOP yang boleh dilihat akun ini: { live, bin }. Admin melihat semua, termasuk seluruh recycle bin. */
 export async function listSops() {
   const { F, db } = await load();
-  const col = F.collection(db, 'sops');
+  const col = F.collection(db, C.sops);
   const { uid } = faculty.user;
   const q = (...w) => F.getDocsFromServer(F.query(col, ...w));
   const snaps = isAdmin()
@@ -244,7 +254,7 @@ export async function listSops() {
 
 export async function listVersions(id) {
   const { F, db } = await load();
-  const snap = await F.getDocsFromServer(F.collection(db, 'sops', id, 'versions'));
+  const snap = await F.getDocsFromServer(F.collection(db, C.sops, id, 'versions'));
   return snap.docs.map((d) => ({ ...d.data(), savedAt: ms(d.data().savedAt) })).sort((a, b) => b.rev - a.rev);
 }
 
@@ -252,7 +262,7 @@ export async function listVersions(id) {
 
 export async function listFolders() {
   const { F, db } = await load();
-  const col = F.collection(db, 'folders');
+  const col = F.collection(db, C.folders);
   const { uid } = faculty.user;
   const q = (...w) => F.getDocsFromServer(F.query(col, ...w));
   const snaps = isAdmin()
@@ -298,7 +308,7 @@ async function usableFolder(id) {
   if (!id) return null;
   const { F, db } = await load();
   try {
-    const snap = await F.getDocFromServer(F.doc(db, 'folders', id));
+    const snap = await F.getDocFromServer(F.doc(db, C.folders, id));
     if (snap.exists() && canManage(snap.data())) return snap.data();
   } catch (e) {
     if (e.code !== 'permission-denied') throw e;
@@ -311,7 +321,7 @@ export async function createFolder(name, parent) {
   const { uid, email, name: createdByName } = faculty.user;
   const up = await folderWrite(usableFolder(parent));
   if (parent && !up) throw new Error('Hanya pemilik folder ini yang bisa menambah isinya.');
-  await folderWrite(F.addDoc(F.collection(db, 'folders'), {
+  await folderWrite(F.addDoc(F.collection(db, C.folders), {
     name, parent, custom: false, ...inherited(up, email),
     createdBy: uid, createdByName, createdByEmail: email, createdAt: F.serverTimestamp()
   }));
@@ -319,19 +329,19 @@ export async function createFolder(name, parent) {
 
 export async function renameFolder(id, name) {
   const { F, db } = await load();
-  await folderWrite(F.updateDoc(F.doc(db, 'folders', id), { name }));
+  await folderWrite(F.updateDoc(F.doc(db, C.folders, id), { name }));
 }
 
 /** `target` adalah folder tujuan (null: tingkat utama). Isi folder menyusul lewat reconcileAccess. */
 export async function moveFolder(f, target) {
   const { F, db } = await load();
   const lists = f.custom ? {} : inherited(target, f.createdByEmail);
-  await folderWrite(F.updateDoc(F.doc(db, 'folders', f.id), { parent: target?.id ?? null, ...lists }));
+  await folderWrite(F.updateDoc(F.doc(db, C.folders, f.id), { parent: target?.id ?? null, ...lists }));
 }
 
 export async function deleteFolder(id) {
   const { F, db } = await load();
-  await folderWrite(F.deleteDoc(F.doc(db, 'folders', id)));
+  await folderWrite(F.deleteDoc(F.doc(db, C.folders, id)));
 }
 
 // ---- Hak akses ----
@@ -339,7 +349,7 @@ export async function deleteFolder(id) {
 /** data: { custom, readers, editors }. Isi folder menyusul lewat reconcileAccess. */
 export async function setAccess(kind, id, data) {
   const { F, db } = await load();
-  await folderWrite(F.updateDoc(F.doc(db, kind, id), data));
+  await folderWrite(F.updateDoc(F.doc(db, C[kind], id), data));
 }
 
 const sameList = (a = [], b = []) => a.length === b.length && new Set([...a, ...b]).size === a.length;
@@ -359,13 +369,13 @@ export async function reconcileAccess(folders, sops) {
   const writes = [];
   const queue = (kind, item, data) => {
     Object.assign(item, data);
-    writes.push({ ref: F.doc(db, kind, item.id), data, item });
+    writes.push({ ref: F.doc(db, C[kind], item.id), data, item });
   };
 
   for (const f of folders) {
     if (f.createdBy === uid && !f.createdByEmail) {
       f.createdByEmail = email;
-      writes.push({ ref: F.doc(db, 'folders', f.id), data: { createdByEmail: email }, item: f });
+      writes.push({ ref: F.doc(db, C.folders, f.id), data: { createdByEmail: email }, item: f });
     }
   }
 
@@ -424,7 +434,7 @@ export async function uploadSop(doc, title, folder = null) {
   const up = await usableFolder(folder).catch(failed);
   if (!up) folder = null;
   const lists = inherited(up, email);
-  const ref = F.doc(F.collection(db, 'sops'));
+  const ref = F.doc(F.collection(db, C.sops));
   const b = F.writeBatch(db);
   const now = F.serverTimestamp();
   b.set(ref, {
@@ -432,7 +442,7 @@ export async function uploadSop(doc, title, folder = null) {
     createdBy: uid, createdByName: name, createdByEmail: email, createdAt: now,
     updatedAt: now, updatedBy: uid, updatedByName: name, deletedAt: null, deletedBy: null
   });
-  b.update(F.doc(db, 'stats/usage'), { bytes: F.increment(c.size), lastSop: ref.id });
+  b.update(F.doc(db, C.usage), { bytes: F.increment(c.size), lastSop: ref.id });
   await b.commit().catch(failed);
   return remoteOf({ id: ref.id, rev: 1, title: c.title, folder, createdBy: uid, createdByEmail: email, ...lists });
 }
@@ -448,7 +458,7 @@ function writeContent(F, db, tx, ref, cur, c) {
     json: c.json, size: c.size, title: c.title, nomor: c.nomor, totalBytes: cur.totalBytes + c.size, rev: cur.rev + 1,
     updatedAt: F.serverTimestamp(), updatedBy: uid, updatedByName: name
   });
-  tx.update(F.doc(db, 'stats/usage'), { bytes: F.increment(c.size), lastSop: ref.id });
+  tx.update(F.doc(db, C.usage), { bytes: F.increment(c.size), lastSop: ref.id });
 }
 
 async function readForWrite(tx, ref) {
@@ -462,7 +472,7 @@ async function readForWrite(tx, ref) {
   if (!snap.exists() || snap.data().deletedBy) throw goneError();
   return snap.data();
 }
-const goneError = () => new FacultyError('gone', 'SOP ini sudah dihapus, atau hak akses Anda sudah dicabut.');
+const goneError = () => new FacultyError('gone', 'RPS ini sudah dihapus, atau hak akses Anda sudah dicabut.');
 
 /**
  * Menyimpan perubahan dari salinan `baseRev`. Bila SOP sudah diubah orang lain, melempar `conflict`
@@ -470,11 +480,11 @@ const goneError = () => new FacultyError('gone', 'SOP ini sudah dihapus, atau ha
  */
 export async function saveSop(id, doc, baseRev, { overwrite = false } = {}) {
   const { F, db } = await load();
-  const ref = F.doc(db, 'sops', id);
+  const ref = F.doc(db, C.sops, id);
   return F.runTransaction(db, async (tx) => {
     const cur = await readForWrite(tx, ref);
     if (cur.rev !== baseRev && !overwrite) {
-      throw new FacultyError('conflict', 'SOP ini sudah diubah orang lain.', { by: cur.updatedByName, at: ms(cur.updatedAt) });
+      throw new FacultyError('conflict', 'RPS ini sudah diubah orang lain.', { by: cur.updatedByName, at: ms(cur.updatedAt) });
     }
     const c = cloudJson(doc);
     if (c.json === cur.json && c.title === cur.title) return { rev: cur.rev, title: cur.title, unchanged: true };
@@ -489,7 +499,7 @@ export async function saveSop(id, doc, baseRev, { overwrite = false } = {}) {
  */
 export async function renameSop(id, title) {
   const { F, db } = await load();
-  const ref = F.doc(db, 'sops', id);
+  const ref = F.doc(db, C.sops, id);
   return F.runTransaction(db, async (tx) => {
     const cur = await readForWrite(tx, ref);
     const c = cloudJson(JSON.parse(cur.json), title);
@@ -501,7 +511,7 @@ export async function renameSop(id, title) {
 /** Isi versi lama menjadi isi terkini (isi saat ini tetap tersimpan di riwayat); namanya tidak ikut mundur. */
 export async function restoreVersion(id, version) {
   const { F, db } = await load();
-  const ref = F.doc(db, 'sops', id);
+  const ref = F.doc(db, C.sops, id);
   await F.runTransaction(db, async (tx) => {
     const cur = await readForWrite(tx, ref);
     writeContent(F, db, tx, ref, cur, cloudJson(JSON.parse(version.json), cur.title));
@@ -509,11 +519,11 @@ export async function restoreVersion(id, version) {
 }
 
 /** Hasil duplikat berdiri sendiri: pemiliknya akun ini, dan hak aksesnya mengikuti folder tempatnya. */
-export const duplicateSop = (sop) => uploadSop(JSON.parse(sop.json), `Salinan dari ${sop.title || 'SOP tanpa judul'}`.slice(0, 300), sop.folder);
+export const duplicateSop = (sop) => uploadSop(JSON.parse(sop.json), `Salinan dari ${sop.title || 'RPS tanpa judul'}`.slice(0, 300), sop.folder);
 
 async function patch(id, data) {
   const { F, db } = await load();
-  await F.updateDoc(F.doc(db, 'sops', id), data).catch(failed);
+  await F.updateDoc(F.doc(db, C.sops, id), data).catch(failed);
 }
 /** `target` adalah folder tujuan (null: tingkat utama). SOP dengan hak khusus tidak berubah daftarnya. */
 export const moveSop = (s, target) => patch(s.id, { folder: target?.id ?? null, ...(s.custom ? {} : inherited(target, s.createdByEmail)) });
@@ -526,12 +536,12 @@ export const restoreFromBin = (id) => patch(id, { deletedAt: null, deletedBy: nu
 /** Hapus permanen, riwayatnya ikut. Tidak bisa dibatalkan. */
 export async function purgeSop(sop) {
   const { F, db } = await load();
-  const ref = F.doc(db, 'sops', sop.id);
+  const ref = F.doc(db, C.sops, sop.id);
   const versions = await F.getDocsFromServer(F.collection(ref, 'versions'));
   const b = F.writeBatch(db);
   versions.forEach((v) => b.delete(v.ref));
   b.delete(ref);
-  b.update(F.doc(db, 'stats/usage'), { bytes: F.increment(-sop.totalBytes), lastSop: sop.id });
+  b.update(F.doc(db, C.usage), { bytes: F.increment(-sop.totalBytes), lastSop: sop.id });
   await b.commit().catch(failed);
 }
 
@@ -543,12 +553,12 @@ let beat = null;
 async function sendMark(sopId) {
   const { F, db } = await load();
   const { uid, name } = faculty.user;
-  await F.setDoc(F.doc(db, 'editing', `${sopId}_${uid}`), { sopId, uid, name, at: F.serverTimestamp() });
+  await F.setDoc(F.doc(db, C.editing, `${sopId}_${uid}`), { sopId, uid, name, at: F.serverTimestamp() });
 }
 
 async function clearMark(sopId, uid) {
   const { F, db } = await load();
-  await F.deleteDoc(F.doc(db, 'editing', `${sopId}_${uid}`));
+  await F.deleteDoc(F.doc(db, C.editing, `${sopId}_${uid}`));
 }
 
 /** Tandai (atau lepaskan tanda) bahwa akun ini sedang mengedit SOP bersama `sopId`. */
@@ -597,7 +607,7 @@ export function watchEditing() {
     load().then(({ F, db }) => {
       if (!watchers) return;
       stopWatch = F.onSnapshot(
-        F.collection(db, 'editing'),
+        F.collection(db, C.editing),
         (snap) => {
           lastMarks = snap.docs.map((d) => {
             const m = d.data({ serverTimestamps: 'estimate' });
@@ -623,21 +633,21 @@ export function watchEditing() {
 
 export async function getUsage() {
   const { F, db } = await load();
-  return (await F.getDocFromServer(F.doc(db, 'stats/usage'))).data();
+  return (await F.getDocFromServer(F.doc(db, C.usage))).data();
 }
 
 export async function setLimit(limit) {
   const { F, db } = await load();
-  await F.updateDoc(F.doc(db, 'stats/usage'), { limit });
+  await F.updateDoc(F.doc(db, C.usage), { limit });
 }
 
 /** Menyamakan penghitung dengan jumlah ukuran semua SOP (termasuk recycle bin dan riwayatnya). */
 export async function recountUsage() {
   const { F, db } = await load();
-  const all = await F.getDocsFromServer(F.collection(db, 'sops'));
+  const all = await F.getDocsFromServer(F.collection(db, C.sops));
   let bytes = 0;
   all.forEach((d) => (bytes += d.data().totalBytes ?? 0));
-  await F.updateDoc(F.doc(db, 'stats/usage'), { bytes, lastSop: '' });
+  await F.updateDoc(F.doc(db, C.usage), { bytes, lastSop: '' });
   return bytes;
 }
 

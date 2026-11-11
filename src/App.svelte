@@ -919,6 +919,10 @@
               <strong>Ke Pustaka Lokal{inLibrary ? ' ✓' : ''}</strong>
               <small>{inLibrary ? `Simpan perubahan ke RPS ini${activeTab?.remote ? '' : ' · Ctrl+S'}` : 'Disimpan di browser ini, buka lagi dari Pustaka Lokal'}</small>
             </button>
+            <button role="menuitem" onclick={() => ((saveOpen = false), saveToFaculty())}>
+              <strong>Ke Pustaka Daring{activeTab?.remote ? ' ✓' : ''}</strong>
+              <small>{activeTab?.remote ? 'Simpan perubahan ke RPS daring ini · Ctrl+S' : 'Unggah sebagai RPS daring baru (private)'}</small>
+            </button>
             <button role="menuitem" onclick={() => ((saveOpen = false), save(false))}>
               <strong>Sebagai berkas .rps</strong><small>{app.fileHandle ? `Timpa ${app.fileName}` : 'Pilih lokasi di perangkat'}{activeTab?.remote || inLibrary ? '' : ' · Ctrl+S'}</small>
             </button>
