@@ -159,6 +159,8 @@ const cellOf = (c) => {
   const o = { size: S, pad: PAD, align: 'left', valign: 'top', ...c };
   o.items = c.items ?? [{ text: c.text ?? '', field: c.field }];
   o.lines = cellLines(o, o.w);
+  // Butir yang isiannya sudah dibuat di bagian sel sebelumnya (sel terbelah): bagian berikutnya diberi id lain.
+  o.placed = new Set();
   return o;
 };
 
@@ -258,9 +260,11 @@ function drawCell(page, x, y, w, h, c, seg = 0, hot = null) {
     // Sel berisi satu isian rata atas: seluruh sel bisa diklik.
     if (single && c.valign === 'top') fh = Math.max(fh, y + h - c.pad - fy);
     const left = c.align === 'left' ? x + c.pad + indent : x + c.pad;
+    const again = c.placed?.has(i);
+    c.placed?.add(i);
     page.fields.push({
       kind: 'text', size: c.size, bold: !!c.bold, align: c.align, hot, ...f,
-      id: f.id + (seg ? `@${seg}` : ''),
+      id: f.id + (again ? `@${seg}` : ''),
       x: left, y: fy, w: x + w - c.pad - left, h: fh,
       skip: at >= 0 ? c.lines[at].k : 0,
       lead: it.lead ? textWidth(it.lead, c.size, c.bold) : 0
@@ -682,7 +686,7 @@ function layoutPertemuan(doc, ctx, pages) {
       { ...base, w: C[0], text: ctx.labelPekan.get(p.id), align: 'center', valign: 'middle', pick: { id: `pk:pekan:${p.id}`, type: 'pertemuan', path: P, label } },
       {
         ...base, w: C[1], text: p.subCpmk.map((s) => ctx.sub.get(s)?.kode).filter(Boolean).join('\n'), align: 'center', valign: 'middle',
-        pick: { id: `pk:sub:${p.id}`, type: 'multi', source: 'subCpmk', path: [...P, 'subCpmk'], label: `${label} · Sub-CPMK` }
+        pick: { id: `pk:psub:${p.id}`, type: 'multi', source: 'subCpmk', path: [...P, 'subCpmk'], label: `${label} · Sub-CPMK` }
       },
       { ...base, w: C[2], field: R([...P, 'indikator'], { label: `${label} · indikator`, placeholder: 'Indikator' }), text: p.indikator },
       {

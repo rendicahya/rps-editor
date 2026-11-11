@@ -31,11 +31,19 @@ Sudah ada:
   - Menghapus CPL/CPMK/Sub-CPMK/pustaka/asesmen ikut menghapus rujukan ke item itu.
   - Pertemuan baru mengikuti pola kuliah → praktikum di pekan yang sama → kuliah pekan berikutnya.
 
+- **Periksa** (jumlah temuan diperbarui langsung; klik temuan untuk menuju isiannya, isian pilihan langsung dibuka):
+  - identitas penting kosong, SKS 0, kode CPL/CPMK/Sub-CPMK/asesmen/LK kosong atau ganda;
+  - CPMK tanpa CPL atau tanpa Sub-CPMK, Sub-CPMK tanpa CPMK induk, CPL yang tidak didukung CPMK;
+  - Sub-CPMK yang tidak dinilai asesmen atau tidak muncul di tabel pertemuan;
+  - total bobot asesmen bukan 100%, porsi asesmen terhadap Sub-CPMK tidak berjumlah 1;
+  - pertemuan tanpa Sub-CPMK/indikator/materi/waktu, urutan pekan tidak naik, pekan yang terlewat, jumlah pekan
+    bukan 16, tidak ada UTS/UAS;
+  - waktu pertemuan dibanding SKS (kuliah n×50 menit, praktikum n×170 menit; "2x50 menit" dan "100 menit" terbaca);
+  - Lembar Kerja tanpa judul, asesmen, Sub-CPMK, atau deskripsi.
+
 Rencana berikutnya:
 1. Seret-lepas untuk mengurutkan baris.
-2. **Periksa**: total bobot 100%, setiap Sub-CPMK punya pertemuan dan asesmen, setiap CPMK punya Sub-CPMK, rujukan
-   pustaka valid, pekan UTS/UAS ada, waktu per pertemuan sesuai SKS.
-3. Pustaka Daring (koleksi `rps`, `rpsFolders`, `rpsEditing`).
+2. Pustaka Daring (koleksi `rps`, `rpsFolders`, `rpsEditing`).
 4. Katalog kurikulum per prodi (`curricula/{prodiId}`) dengan peran **pengelola prodi**.
 5. Asisten AI: susun RPS baru, impor RPS lama (PDF/Word), revisi.
 

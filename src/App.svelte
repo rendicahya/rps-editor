@@ -110,12 +110,13 @@
   const issueErrors = $derived(issues.filter((i) => i.level === 'error').length);
   const issueWarns = $derived(issues.filter((i) => i.level === 'warn').length);
 
-  /** Tampilkan isian `ref` (data-field) di halaman. */
+  /** Tampilkan isian `ref` (data-field) di halaman; isian pilihan ('pk:') dibuka panelnya. */
   async function jumpTo(ref) {
     await tick();
     const el = document.querySelector(`[data-field="${ref}"]`);
     el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     el?.focus({ preventScroll: true });
+    if (ref.startsWith('pk:') && el?.getAttribute('aria-expanded') !== 'true') el?.click();
   }
 
   // Font dokumen wajib Calibri; Carlito hanya pengganti sementara bila Calibri belum diambil dari perangkat.
