@@ -74,6 +74,63 @@ export function newLembarKerja() {
   };
 }
 
+/** Item baru untuk daftar dokumen `list` (lihat LISTS). */
+export function newItem(list, extra = {}) {
+  switch (list) {
+    case 'pustaka':
+      return { id: uid(), jenis: 'utama', teks: '', ...extra };
+    case 'cpl':
+      return { id: uid(), kode: '', teks: '', ...extra };
+    case 'cpmk':
+      return { id: uid(), kode: '', teks: '', cpl: [], ...extra };
+    case 'subCpmk':
+      return { id: uid(), kode: '', teks: '', cpmk: null, ...extra };
+    case 'asesmen':
+      return { ...newAsesmen(), ...extra };
+    case 'pertemuan':
+      return { ...newPertemuan(), ...extra };
+    case 'lembarKerja':
+      return { ...newLembarKerja(), ...extra };
+  }
+  throw new Error('Daftar tidak dikenal: ' + list);
+}
+
+/** Nama tampilan daftar dokumen (untuk menu dan tooltip). */
+export const LISTS = {
+  pustaka: 'pustaka',
+  cpl: 'CPL',
+  cpmk: 'CPMK',
+  subCpmk: 'Sub-CPMK',
+  asesmen: 'asesmen',
+  pertemuan: 'pertemuan',
+  lembarKerja: 'Lembar Kerja'
+};
+
+/** Menghapus item `id` dari daftar `list` beserta semua rujukan ke item itu. */
+export function removeItem(doc, list, id) {
+  const i = doc[list].findIndex((x) => x.id === id);
+  if (i < 0) return;
+  doc[list].splice(i, 1);
+  const drop = (arr) => {
+    const k = arr.indexOf(id);
+    if (k >= 0) arr.splice(k, 1);
+  };
+  if (list === 'cpl') for (const c of doc.cpmk) drop(c.cpl);
+  if (list === 'cpmk') for (const s of doc.subCpmk) if (s.cpmk === id) s.cpmk = null;
+  if (list === 'subCpmk') {
+    for (const p of doc.pertemuan) drop(p.subCpmk);
+    for (const a of doc.asesmen) delete a.porsi[id];
+    for (const l of doc.lembarKerja) drop(l.subCpmk);
+  }
+  if (list === 'pustaka') for (const p of doc.pertemuan) drop(p.pustaka);
+  if (list === 'asesmen') for (const l of doc.lembarKerja) if (l.asesmen === id) l.asesmen = null;
+}
+
+/** Salinan item dengan id baru (rujukan ke item lain tetap). */
+export function duplicateItem(item) {
+  return { ...JSON.parse(JSON.stringify(item)), id: uid() };
+}
+
 export function emptyDocument() {
   const year = new Date().getFullYear();
   return {

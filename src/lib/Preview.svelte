@@ -12,7 +12,7 @@
     <figure class="sheet" style:--frac={page.w / WIDEST}>
       <div class="page">
         <PageSvg {page} />
-        {#if page.fields.length}<PageFields fields={page.fields} {editable} />{/if}
+        {#if page.fields.length}<PageFields fields={page.fields} pageW={page.w} pageH={page.h} {editable} />{/if}
       </div>
       <figcaption>Halaman {i + 1} / {pages.length}</figcaption>
     </figure>

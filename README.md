@@ -18,9 +18,21 @@ Sudah ada:
 - Label pekan ("1.a", "b", …), nomor pustaka, dan rujukan [pustaka] di tabel pertemuan dihitung otomatis.
 - Pratinjau = PDF (mesin tata letak yang sama), ekspor PDF dengan data `.rps` tersemat (PDF bisa dibuka lagi).
 - Tab, Undo/Redo, Pustaka Lokal, cari & ganti, tombol **Contoh** (RPS Algoritma dan Struktur Data).
+- **Edit langsung di halaman** (WYSIWYG) di semua halaman:
+  - Klik teks untuk mengetik; isian berformat mendukung tebal/miring/garis bawah dan daftar (Ctrl+Shift+7/8).
+    Sel yang terbelah antarhalaman bisa diedit di bagian mana pun.
+  - Daftar nama (dosen pengelola, tim dosen), metode, dan pustaka diedit per butir: Enter menambah butir,
+    Backspace di awal butir menggabungkannya dengan butir sebelumnya.
+  - Klik sel relasi untuk memilih: Support CP (CPL), Support CPMK, Sub-CPMK pertemuan, pekan/jenis/pustaka
+    pertemuan (klik label pekan), asesmen dan Sub-CPMK Lembar Kerja, SKS, semester, sifat, tanggal penyusunan.
+  - Sorot baris CPL/CPMK/Sub-CPMK/asesmen/pertemuan (atau kop Lembar Kerja) untuk menaikkan, menurunkan,
+    menduplikat, menambah, atau menghapusnya; tombol **P/K** mengganti pertemuan praktikum/kuliah. Menu klik kanan
+    berisi aksi yang sama, plus "Buat Lembar Kerja untuk asesmen ini" dan pindah jenis pustaka.
+  - Menghapus CPL/CPMK/Sub-CPMK/pustaka/asesmen ikut menghapus rujukan ke item itu.
+  - Pertemuan baru mengikuti pola kuliah → praktikum di pekan yang sama → kuliah pekan berikutnya.
 
 Rencana berikutnya:
-1. Edit langsung di halaman (WYSIWYG): isian teks, tambah/hapus/geser baris, pilihan Sub-CPMK/pustaka/CPL.
+1. Seret-lepas untuk mengurutkan baris.
 2. **Periksa**: total bobot 100%, setiap Sub-CPMK punya pertemuan dan asesmen, setiap CPMK punya Sub-CPMK, rujukan
    pustaka valid, pekan UTS/UAS ada, waktu per pertemuan sesuai SKS.
 3. Pustaka Daring (koleksi `rps`, `rpsFolders`, `rpsEditing`).

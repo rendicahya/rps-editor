@@ -47,7 +47,7 @@ export function textFields(doc) {
   for (const [key, label] of IDENTITAS) out.push({ obj: id, key, label, ref: 'id:' + key, rich: RICH_IDENTITAS.has(key) });
   id.dosenPengelola.forEach((_, i) => out.push({ obj: id.dosenPengelola, key: i, label: `Dosen pengelola ${i + 1}`, ref: `id:dosenPengelola:${i}` }));
   id.timDosen.forEach((_, i) => out.push({ obj: id.timDosen, key: i, label: `Tim dosen ${i + 1}`, ref: `id:timDosen:${i}` }));
-  doc.pustaka.forEach((p, i) => out.push({ obj: p, key: 'teks', label: `Pustaka ${i + 1}`, ref: `pustaka:${p.id}`, rich: true }));
+  doc.pustaka.forEach((p, i) => out.push({ obj: p, key: 'teks', label: `Pustaka ${i + 1}`, ref: `pustaka:${p.id}:teks`, rich: true }));
   for (const [list, label] of [['cpl', 'CPL'], ['cpmk', 'CPMK'], ['subCpmk', 'Sub-CPMK']]) {
     for (const x of doc[list]) {
       out.push({ obj: x, key: 'kode', label: `${label} · kode`, ref: `${list}:${x.id}:kode` });
