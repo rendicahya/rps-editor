@@ -2,7 +2,8 @@
   import { onMount, tick, untrack } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
   import { app, persist, tabs, stash, newTabId, saveSession, loadSession } from './lib/store.svelte.js';
-  import { emptyDocument, parseDocumentText, docTitle } from './lib/model.js';
+  import { emptyDocument, parseDocumentText, docTitle, importCatalog } from './lib/model.js';
+  import CurriculumDialog from './lib/CurriculumDialog.svelte';
   import { sampleDocument } from './lib/sample.js';
   import { layoutDocument } from './lib/layout.js';
   import { exportPdf, rpsFromPdf } from './lib/pdf.js';
@@ -497,6 +498,20 @@
     openInTab(emptyDocument());
   }
 
+  // Katalog kurikulum prodi (Pustaka Daring): CPL/CPMK yang dipilih disalin ke RPS aktif sebagai satu langkah Undo.
+  let curriculumOpen = $state(false);
+  function useCatalog(cat, pick) {
+    checkpoint();
+    const n = importCatalog(app.doc, $state.snapshot(cat), pick);
+    checkpoint();
+    notify(
+      n.cpl + n.cpmk
+        ? `Dari katalog ${cat.nama}: ${n.cpl} CPL dan ${n.cpmk} CPMK ditambahkan`
+        : 'Semua yang dipilih sudah ada di RPS ini (kodenya sama)'
+    );
+    return true;
+  }
+
   /** Contoh RPS (Algoritma dan Struktur Data) di tab baru; belum tersimpan di mana pun. */
   function openSample() {
     openInTab(sampleDocument());
@@ -907,6 +922,7 @@
       <button class="btn ghost" onclick={newDoc} title="Dokumen baru">Baru</button>
       <button class="btn ghost" onclick={open} title="Buka berkas .rps (Ctrl+O)">Buka</button>
       <button class="btn ghost" onclick={openSample} title="Buka contoh RPS (Algoritma dan Struktur Data)">Contoh</button>
+      <button class="btn ghost" onclick={() => (curriculumOpen = true)} aria-haspopup="dialog" title="Katalog CPL/CPMK per prodi: pakai di RPS ini, atau kelola bila Anda pengelola prodi">Kurikulum</button>
       {@render libraryButton('btn ghost')}
       <div class="export">
         <button class="btn ghost" onclick={toggleSaveMenu} disabled={empty} aria-haspopup="menu" aria-expanded={saveOpen} title="Simpan ke Pustaka Lokal, Pustaka Daring, atau sebagai berkas .rps">
@@ -1145,6 +1161,7 @@
       onnotify: notify
     }}
   />
+  <CurriculumDialog bind:open={curriculumOpen} onimport={useCatalog} cansave={!empty} />
   <FacultyConflict info={conflict} onchoice={chooseConflict} />
   <CloseConfirm info={closeAsk} onchoice={chooseClose} />
 

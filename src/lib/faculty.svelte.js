@@ -708,3 +708,39 @@ export async function deleteGroup(id, members) {
   await setGroupMembers(id, [], members);
   await F.deleteDoc(F.doc(db, 'groups', id));
 }
+
+// ---- Katalog kurikulum: CPL/CPMK per prodi (curricula/{id}) ----
+// Semua anggota membaca. Admin membuat/menghapus prodi dan menunjuk pengelolanya; pengelola prodi mengedit isinya.
+
+/** Pengelola prodi `c` (atau admin) boleh mengedit isi katalognya. */
+export const canEditCurriculum = (c) => isAdmin() || (!!faculty.user && (c?.managers ?? []).includes(faculty.user.email));
+
+export async function listCurricula() {
+  const { F, db } = await load();
+  const snap = await F.getDocsFromServer(F.collection(db, 'curricula'));
+  return snap.docs
+    .map((d) => ({ id: d.id, ...d.data(), updatedAt: ms(d.data().updatedAt) }))
+    .sort((a, b) => a.nama.localeCompare(b.nama, 'id'));
+}
+
+/** Menulis seluruh isi katalog `id` (membuat bila belum ada; hanya admin yang boleh membuat). */
+export async function saveCurriculum(id, { nama, departemen, managers, cpl, cpmk }) {
+  const { F, db } = await load();
+  const data = {
+    nama: nama.trim().slice(0, 120), departemen: (departemen ?? '').trim().slice(0, 120),
+    managers: [...new Set(managers.map((m) => m.trim().toLowerCase()).filter(Boolean))],
+    cpl: cpl.map(({ id, kode, teks }) => ({ id, kode, teks })),
+    cpmk: cpmk.map(({ id, kode, teks, cpl }) => ({ id, kode, teks, cpl: [...cpl] })),
+    updatedAt: F.serverTimestamp(), updatedBy: faculty.user.uid, updatedByName: faculty.user.name
+  };
+  await F.setDoc(F.doc(db, 'curricula', id), data).catch((e) => {
+    throw new Error(e?.code === 'permission-denied' ? 'Anda tidak berhak mengubah katalog prodi ini.' : readable(e));
+  });
+}
+
+export async function deleteCurriculum(id) {
+  const { F, db } = await load();
+  await F.deleteDoc(F.doc(db, 'curricula', id)).catch((e) => {
+    throw new Error(readable(e));
+  });
+}

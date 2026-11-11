@@ -126,6 +126,37 @@ export function removeItem(doc, list, id) {
   if (list === 'asesmen') for (const l of doc.lembarKerja) if (l.asesmen === id) l.asesmen = null;
 }
 
+/**
+ * Menyalin CPL/CPMK terpilih dari katalog prodi `cat` ke dokumen. CPL yang didukung CPMK terpilih ikut disalin.
+ * Item yang kodenya sudah ada di dokumen tidak diduplikasi (rujukan CPMK → CPL memakai yang sudah ada).
+ * Prodi dan departemen identitas diisi dari katalog bila masih kosong. Hasil: { cpl, cpmk } jumlah yang ditambahkan.
+ */
+export function importCatalog(doc, cat, { cpl: pickCpl, cpmk: pickCpmk }) {
+  const key = (k) => k.trim().toLowerCase();
+  const cplOf = new Map(); // id katalog → id dokumen
+  const added = { cpl: 0, cpmk: 0 };
+  const need = new Set(pickCpl);
+  for (const m of cat.cpmk) if (pickCpmk.has(m.id)) for (const c of m.cpl) need.add(c);
+  for (const c of cat.cpl) {
+    const have = doc.cpl.find((x) => key(x.kode) === key(c.kode) && c.kode.trim());
+    if (have) cplOf.set(c.id, have.id);
+    else if (need.has(c.id)) {
+      const n = newItem('cpl', { kode: c.kode, teks: c.teks });
+      doc.cpl.push(n);
+      cplOf.set(c.id, n.id);
+      added.cpl++;
+    }
+  }
+  for (const m of cat.cpmk) {
+    if (!pickCpmk.has(m.id) || doc.cpmk.some((x) => key(x.kode) === key(m.kode) && m.kode.trim())) continue;
+    doc.cpmk.push(newItem('cpmk', { kode: m.kode, teks: m.teks, cpl: m.cpl.map((c) => cplOf.get(c)).filter(Boolean) }));
+    added.cpmk++;
+  }
+  if (!doc.identitas.prodi.trim()) doc.identitas.prodi = cat.nama;
+  if (!doc.identitas.departemen.trim() && cat.departemen) doc.identitas.departemen = cat.departemen;
+  return added;
+}
+
 /** Salinan item dengan id baru (rujukan ke item lain tetap). */
 export function duplicateItem(item) {
   return { ...JSON.parse(JSON.stringify(item)), id: uid() };
