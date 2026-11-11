@@ -1,7 +1,8 @@
 name: Deploy ke GitHub Pages
 
-# Sementara manual saja sampai aplikasi siap pakai; setelah itu deploy otomatis setiap push ke main.
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
