@@ -50,9 +50,15 @@ Sudah ada:
     CPL yang didukung CPMK terpilih ikut disalin, kode yang sudah ada tidak diduplikasi, prodi/departemen yang
     masih kosong diisi dari katalog.
 
+- **Asisten AI** (tanpa kunci API: prompt disalin ke asisten AI pilihan, jawabannya ditempel kembali):
+  - *Susun RPS baru* dari deskripsi mata kuliah (16 pekan, asesmen, porsi Sub-CPMK, Lembar Kerja);
+  - *Impor RPS lama* dari PDF, Word, atau foto yang dilampirkan di chat AI;
+  - *Revisi RPS ini* sesuai instruksi; hasilnya menggantikan dokumen aktif dan bisa di-Undo.
+  - Jawaban boleh terbungkus ```json``` atau berisi kalimat pengantar; rujukan boleh berupa kode.
+- PDF hasil ekspor menyertakan data `.rps` (JSON) sebagai lampiran, sehingga PDF bisa dibuka lagi untuk diedit.
+
 Rencana berikutnya:
 1. Seret-lepas untuk mengurutkan baris.
-2. Asisten AI: susun RPS baru, impor RPS lama (PDF/Word), revisi.
 
 ## Firebase
 

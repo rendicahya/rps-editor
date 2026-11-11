@@ -4,6 +4,7 @@
   import { app, persist, tabs, stash, newTabId, saveSession, loadSession } from './lib/store.svelte.js';
   import { emptyDocument, parseDocumentText, docTitle, importCatalog } from './lib/model.js';
   import CurriculumDialog from './lib/CurriculumDialog.svelte';
+  import AiDialog from './lib/AiDialog.svelte';
   import { sampleDocument } from './lib/sample.js';
   import { layoutDocument } from './lib/layout.js';
   import { exportPdf, rpsFromPdf } from './lib/pdf.js';
@@ -540,6 +541,30 @@
     }
   }
 
+  // Jawaban AI yang ditempel: dokumen baru tanpa berkas, atau (revise) pengganti dokumen aktif yang bisa di-Undo.
+  let aiOpen = $state(false);
+  function loadPasted(text, revise = false) {
+    try {
+      const doc = parseDocumentText(text);
+      if (revise) {
+        replaceDocument(doc, app.fileName, app.fileHandle);
+        notify('Revisi dari AI diterapkan — periksa kembali isinya (Ctrl+Z untuk membatalkan)');
+        return true;
+      }
+      openInTab(doc);
+      clean = null; // hasil AI belum ada salinannya di mana pun
+      notify('Dokumen dari AI dibuka — periksa kembali isinya (tombol Periksa) sebelum diekspor');
+      return true;
+    } catch (e) {
+      ui.alert(
+        e instanceof SyntaxError
+          ? 'Jawaban AI bukan JSON yang valid (mungkin terpotong). Minta AI mengulang dan menampilkan JSON secara lengkap.'
+          : e.message
+      );
+      return false;
+    }
+  }
+
   async function open() {
     try {
       const f = await openJsonFile();
@@ -923,6 +948,7 @@
       <button class="btn ghost" onclick={open} title="Buka berkas .rps (Ctrl+O)">Buka</button>
       <button class="btn ghost" onclick={openSample} title="Buka contoh RPS (Algoritma dan Struktur Data)">Contoh</button>
       <button class="btn ghost" onclick={() => (curriculumOpen = true)} aria-haspopup="dialog" title="Katalog CPL/CPMK per prodi: pakai di RPS ini, atau kelola bila Anda pengelola prodi">Kurikulum</button>
+      <button class="btn ghost" onclick={() => (aiOpen = true)} aria-haspopup="dialog" title="Susun RPS baru, impor RPS lama (PDF/Word), atau revisi RPS ini dengan bantuan asisten AI">🪄 Asisten AI</button>
       {@render libraryButton('btn ghost')}
       <div class="export">
         <button class="btn ghost" onclick={toggleSaveMenu} disabled={empty} aria-haspopup="menu" aria-expanded={saveOpen} title="Simpan ke Pustaka Lokal, Pustaka Daring, atau sebagai berkas .rps">
@@ -1161,6 +1187,7 @@
       onnotify: notify
     }}
   />
+  <AiDialog bind:open={aiOpen} docKey={tabs.active} onpaste={loadPasted} />
   <CurriculumDialog bind:open={curriculumOpen} onimport={useCatalog} cansave={!empty} />
   <FacultyConflict info={conflict} onchoice={chooseConflict} />
   <CloseConfirm info={closeAsk} onchoice={chooseClose} />
