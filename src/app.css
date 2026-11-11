@@ -1,0 +1,705 @@
+/* Font halaman dokumen (Calibri) dipasang lewat FontFace di lib/fonts.js; antarmuka memakai Inter. */
+:root {
+  --ui-font: 'Inter Variable', system-ui, 'Segoe UI', Roboto, sans-serif;
+  --bg: #eef0f4;
+  --surface: #ffffff;
+  --surface-2: #f5f7fa;
+  --line: #d6dbe4;
+  --text: #1c2330;
+  --muted: #667085;
+  --accent: #1f4e8c;
+  --accent-soft: #e5edf8;
+  --danger: #b42318;
+  --input-bg: #ffffff;
+  --preview-bg: #d9dde5;
+  --mark: #fde68a;
+  --toast-bg: #1c2330;
+  --warn-bg: #fffaeb;
+  --warn-line: #fedf89;
+  --drop-bg: rgb(229 237 248 / 0.85);
+  --radius: 10px;
+  color-scheme: light;
+  font-family: var(--ui-font);
+  font-size: 15px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+/* Mode gelap: hanya antarmuka; halaman dokumen di pratinjau tetap putih seperti hasil PDF. */
+:root[data-theme='dark'] {
+  --bg: #12161d;
+  --surface: #1a1f28;
+  --surface-2: #232a35;
+  --line: #333c4a;
+  --text: #e4e8ef;
+  --muted: #98a2b3;
+  --accent: #6ea3e8;
+  --accent-soft: #1e3352;
+  --danger: #f97066;
+  --input-bg: #11151b;
+  --preview-bg: #0c0f14;
+  --mark: #8a6d10;
+  --toast-bg: #2c3442;
+  --warn-bg: #2b2412;
+  --warn-line: #5c4a14;
+  --drop-bg: rgb(18 30 48 / 0.85);
+  color-scheme: dark;
+}
+:root[data-theme='dark'] .btn.primary {
+  background: #2f66b0;
+  border-color: #2f66b0;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+}
+
+#app {
+  height: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* ---------- Kerangka ---------- */
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 1rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  min-width: 0;
+}
+.brand div {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+  min-width: 0;
+}
+.brand small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 40vw;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+/* Tab dokumen */
+.tabbar {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  padding: 0.35rem 0.75rem 0;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--line);
+}
+.tabbar .tabs {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  /* Tab yang meluap digeser dengan roda mouse; scrollbar disembunyikan. Margin -1px menutup
+     garis bawah bar tepat di bawah tab aktif tanpa membuat luapan vertikal. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  margin-bottom: -1px;
+}
+.tabbar .tabs::-webkit-scrollbar {
+  display: none;
+}
+.tabbar .fmt {
+  flex: none;
+  align-self: center;
+  padding-bottom: 0.35rem;
+}
+.tabbar .tab-sep {
+  flex: none;
+  align-self: center;
+  width: 1px;
+  height: 1.2rem;
+  margin-bottom: 0.35rem;
+  background: var(--line);
+}
+.tabbar .dur {
+  flex: none;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-bottom: 0.35rem;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tabbar .dur:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tabbar .dur strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.tabbar .dur .warn {
+  color: #d98e04;
+  font-weight: 700;
+}
+@media (max-width: 1100px) {
+  .tabbar .dur .lbl {
+    display: none;
+  }
+}
+.tabbar .zoom {
+  flex: none;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding-bottom: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+.tabbar .zoom input {
+  width: 110px;
+}
+.tabbar .zoom-step {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.tabbar .zoom-step:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tabbar .zoom-step:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.doc-tab.dragged {
+  opacity: 0.5;
+}
+.doc-tab {
+  display: flex;
+  align-items: center;
+  flex: 0 1 220px;
+  min-width: 110px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  color: var(--muted);
+}
+.doc-tab:hover {
+  background: var(--bg);
+}
+.doc-tab.active {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--text);
+}
+.doc-tab button {
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.doc-tab [role='tab'] {
+  flex: 1;
+  min-width: 0;
+  padding: 0.4rem 0.2rem 0.4rem 0.7rem;
+  text-align: left;
+  font-size: 0.82rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.doc-tab.active [role='tab'] {
+  font-weight: 600;
+}
+.doc-tab .unsaved {
+  display: inline-block;
+  width: 0.5rem;
+  height: 0.5rem;
+  margin-right: 0.3rem;
+  border-radius: 50%;
+  background: #d97706;
+  vertical-align: 0.05em;
+}
+.doc-tab .close {
+  width: 1.4rem;
+  height: 1.4rem;
+  margin-right: 0.3rem;
+  border-radius: 5px;
+  line-height: 1;
+  font-size: 1rem;
+  color: var(--muted);
+}
+.doc-tab .close:hover {
+  background: var(--line);
+  color: var(--text);
+}
+.tabbar .add {
+  flex: none;
+  align-self: center;
+  width: 1.8rem;
+  height: 1.8rem;
+  margin-left: 0.2rem;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font-size: 1.15rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tabbar .add:hover:not(:disabled) {
+  background: var(--bg);
+  color: var(--text);
+}
+.tabbar .add:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.sep {
+  width: 1px;
+  height: 1.4rem;
+  background: var(--line);
+  margin: 0 0.25rem;
+}
+
+.workspace {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.preview {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  background: var(--preview-bg);
+}
+.zoom-val {
+  width: 2.6rem;
+  text-align: right;
+}
+.preview-scroll {
+  flex: 1;
+  overflow: auto;
+}
+.preview-scroll .pages {
+  align-items: safe center;
+}
+
+/* ---------- Form (dialog) ---------- */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-bottom: 0.6rem;
+  min-width: 0;
+}
+.label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.hint {
+  color: var(--muted);
+  font-size: 0.78rem;
+  margin: 0 0 0.6rem;
+}
+small.hint {
+  margin: 0;
+}
+.error {
+  color: var(--danger);
+}
+input:not([type='checkbox']):not([type='range']),
+select,
+textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 0.42rem 0.55rem;
+  background: var(--input-bg);
+  min-width: 0;
+}
+textarea {
+  resize: vertical;
+  line-height: 1.4;
+}
+textarea.autogrow {
+  field-sizing: content;
+  min-height: 2.2rem;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+/* ---------- Tombol ---------- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  border-radius: 7px;
+  padding: 0.42rem 0.8rem;
+  cursor: pointer;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.btn:hover {
+  background: var(--surface-2);
+}
+.btn.ghost {
+  border-color: transparent;
+  background: transparent;
+}
+.btn.ghost:hover {
+  background: var(--surface-2);
+}
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.btn.primary:hover {
+  filter: brightness(1.1);
+}
+.btn.small {
+  padding: 0.28rem 0.6rem;
+  font-size: 0.82rem;
+}
+
+/* Tombol Periksa dengan jumlah temuan */
+.check-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.check-btn.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.check-btn .badge {
+  min-width: 1.15rem;
+  height: 1.15rem;
+  padding: 0 0.3rem;
+  border-radius: 999px;
+  display: inline-grid;
+  place-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+  color: #fff;
+  background: #d98e04;
+}
+.check-btn .badge.err {
+  background: var(--danger);
+}
+.check-btn .badge.ok {
+  background: #2e8540;
+}
+
+/* Menu ekspor */
+.export {
+  position: relative;
+}
+.no-doc {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem 1rem;
+  text-align: center;
+  color: var(--muted);
+}
+.no-doc strong {
+  color: var(--text, inherit);
+  font-size: 1.1rem;
+}
+.no-doc .actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.no-doc .export-menu strong {
+  font-size: inherit;
+}
+.export-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 50;
+  min-width: 15rem;
+  padding: 0.3rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);
+  display: flex;
+  flex-direction: column;
+}
+.export-menu.left {
+  right: auto;
+  left: 0;
+}
+.export-menu button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.1rem;
+  border: 0;
+  background: transparent;
+  border-radius: 6px;
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  cursor: pointer;
+}
+.export-menu button:hover,
+.export-menu button:focus-visible {
+  background: var(--surface-2);
+}
+.export-menu small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.icon {
+  border: 1px solid transparent;
+  background: transparent;
+  border-radius: 6px;
+  width: 1.9rem;
+  height: 1.9rem;
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 0.95rem;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+}
+.icon.on {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.icon:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.icon.danger:hover:not(:disabled) {
+  color: var(--danger);
+}
+button:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* ---------- Notifikasi ---------- */
+.banner,
+.toast {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--toast-bg);
+  color: #fff;
+  border-radius: 10px;
+  padding: 0.55rem 0.9rem;
+  font-size: 0.85rem;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.2);
+  z-index: 20;
+}
+.banner {
+  bottom: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.banner .btn.ghost {
+  color: #fff;
+}
+.banner .btn.ghost:hover {
+  background: rgb(255 255 255 / 0.1);
+}
+.toast {
+  bottom: 4.5rem;
+}
+.dropzone {
+  position: fixed;
+  inset: 0.75rem;
+  border: 3px dashed var(--accent);
+  border-radius: 16px;
+  background: var(--drop-bg);
+  display: grid;
+  place-items: center;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--accent);
+  pointer-events: none;
+  z-index: 30;
+}
+
+.waiting {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.9rem;
+  background: var(--warn-bg);
+  border-bottom: 1px solid var(--warn-line);
+  font-size: 0.82rem;
+}
+.font-warn {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0.9rem;
+  background: var(--warn-bg);
+  border-bottom: 1px solid var(--warn-line);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+.font-warn .actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+.font-warn code {
+  font-size: 0.95em;
+}
+/* ---------- HP: aplikasi tidak didukung ---------- */
+.signin-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 2rem 1.5rem;
+  text-align: center;
+  background: var(--bg);
+  color: var(--text);
+}
+.signin-gate strong {
+  font-size: 1.25rem;
+}
+.signin-gate p {
+  margin: 0;
+  max-width: 26rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.signin-gate p.error {
+  color: var(--danger);
+}
+.signin-gate .gate-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.mobile-block {
+  display: none;
+}
+@media (max-width: 760px), (hover: none) and (pointer: coarse) {
+  .app,
+  .signin-gate {
+    display: none;
+  }
+  .mobile-block {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 2rem 1.5rem;
+    text-align: center;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .mobile-block strong {
+    font-size: 1.15rem;
+  }
+  .mobile-block p {
+    margin: 0;
+    max-width: 22rem;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+}
+
+/* Cetak lewat browser: kertas A4 mendatar, sama dengan ekspor PDF/DOCX/XLSX. */
+@page {
+  size: A4 landscape;
+}
+
