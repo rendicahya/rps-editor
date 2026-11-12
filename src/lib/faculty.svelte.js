@@ -321,10 +321,11 @@ export async function createFolder(name, parent) {
   const { uid, email, name: createdByName } = faculty.user;
   const up = await folderWrite(usableFolder(parent));
   if (parent && !up) throw new Error('Hanya pemilik folder ini yang bisa menambah isinya.');
-  await folderWrite(F.addDoc(F.collection(db, C.folders), {
+  const ref = await folderWrite(F.addDoc(F.collection(db, C.folders), {
     name, parent, custom: false, ...inherited(up, email),
     createdBy: uid, createdByName, createdByEmail: email, createdAt: F.serverTimestamp()
   }));
+  return ref.id;
 }
 
 export async function renameFolder(id, name) {

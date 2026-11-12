@@ -1,6 +1,7 @@
 <script>
   import { SvelteSet } from 'svelte/reactivity';
   import { haystack } from './library.js';
+  import { readRpsFiles } from './bulkImport.js';
   import * as F from './faculty.svelte.js';
   import { faculty, canManage, canEdit } from './faculty.svelte.js';
   import AccessDialog from './AccessDialog.svelte';
@@ -259,11 +260,14 @@
   // ---- Seret dan lepas ----
   // Yang bisa diseret: RPS dan folder yang boleh dipindahkan (pemilik dan admin). Tempat lepas: folder di pohon,
   // breadcrumb, folder di hasil pencarian, dan area daftar (folder yang sedang dibuka).
+  // Berkas dari luar (ZIP berisi .rps, .rps, .json, PDF hasil ekspor) juga bisa dilepas ke tempat yang sama: diimpor.
   let drag = $state(null); // { item, isFolder }
   let dropAt = $state(undefined); // id folder yang sedang disorot; null = Utama
   let hoverTimer;
   const parentOf = (d) => (d.isFolder ? (parents.get(d.item.id) ?? null) : folderOf(d.item));
-  function canDrop(target) {
+  const fileDrag = (e) => !drag && !!e.dataTransfer?.types.includes('Files');
+  function canDrop(target, files = false) {
+    if (files) return !importing && canAdd(target);
     if (!drag || target === parentOf(drag) || !canAdd(target)) return false;
     return !(drag.isFolder && target && pathOf(target).some((a) => a.id === drag.item.id));
   }
@@ -276,15 +280,18 @@
     e.dataTransfer.setData('text/plain', isFolder ? item.name : titleOf(item));
   }
   function dragOver(e, target) {
-    if (!drag) return;
+    const files = fileDrag(e);
+    if (!drag && !files) return;
     e.stopPropagation();
-    if (!canDrop(target)) {
+    if (!canDrop(target, files)) {
+      // Berkas tetap ditahan di sini agar tidak jatuh ke editor (yang akan membukanya di tab).
+      if (files) e.preventDefault();
       e.dataTransfer.dropEffect = 'none';
       if (dropAt === target) dropAt = undefined;
       return;
     }
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    e.dataTransfer.dropEffect = files ? 'copy' : 'move';
     if (dropAt !== target) {
       dropAt = target;
       clearTimeout(hoverTimer);
@@ -298,10 +305,14 @@
   function dropOn(e, target) {
     e.preventDefault();
     e.stopPropagation();
+    const files = fileDrag(e);
     const d = drag;
-    const ok = canDrop(target);
+    const ok = canDrop(target, files);
     dragEnd();
-    if (d && ok) moveTo(d.item, d.isFolder, target);
+    if (files) {
+      if (ok) importFiles([...e.dataTransfer.files], target);
+      else if (!importing) ui.alert(noAddTip);
+    } else if (d && ok) moveTo(d.item, d.isFolder, target);
   }
   function dragEnd() {
     clearTimeout(hoverTimer);
@@ -315,6 +326,75 @@
     ondragleave: (e) => dragLeave(e, target),
     ondrop: (e) => dropOn(e, target)
   });
+
+  // ---- Impor banyak RPS sekaligus ----
+  let importing = $state(null); // { done, total }
+  let importInput;
+  const placeName = (id) => (id ? byId.get(id)?.name : 'Utama');
+  const list = (rows, max = 8) => rows.slice(0, max).join('\n') + (rows.length > max ? `\n… dan ${rows.length - max} lainnya` : '');
+
+  function pickImport(target = here) {
+    importInput.dataset.target = target ?? '';
+    importInput.value = '';
+    importInput.click();
+  }
+
+  /**
+   * Mengunggah RPS dari ZIP/berkas ke folder `target` sebagai RPS baru milik akun ini.
+   * Subfolder di dalam ZIP dibuat ulang di bawah `target`; folder bernama sama yang boleh diisi dipakai ulang.
+   */
+  async function importFiles(files, target) {
+    if (importing || !files.length) return;
+    if (!canAdd(target)) return ui.alert(noAddTip);
+    let res;
+    try {
+      res = await readRpsFiles(files);
+    } catch (e) {
+      return ui.alert(e.message);
+    }
+    const { items, skipped } = res;
+    const skippedText = skipped.length ? `\n\nDilewati (${skipped.length}):\n${list(skipped.map((s) => `• ${s.name}: ${s.reason}`))}` : '';
+    if (!items.length) return ui.alert(`Tidak ada RPS yang bisa diimpor.${skippedText}`, { title: 'Impor RPS' });
+    const dirs = new Set(items.flatMap((i) => i.folders.map((_, k) => i.folders.slice(0, k + 1).join('/'))));
+    const msg =
+      `Impor ${items.length} RPS ke folder ${placeName(target)}?` +
+      (dirs.size ? `\n\nStruktur folder di dalam ZIP ikut dibuat (${dirs.size} folder; folder bernama sama dipakai ulang).` : '') +
+      `\n\n${list(items.map((i) => `• ${i.title}`))}${skippedText}`;
+    if (!(await ui.confirm(msg, { title: 'Impor RPS', ok: `Impor ${items.length} RPS` }))) return;
+
+    importing = { done: 0, total: items.length };
+    const made = new Map(); // 'A/B' → Promise<id folder>
+    const ensureFolder = (path) => {
+      let p = Promise.resolve(target);
+      path.forEach((_, k) => {
+        const key = path.slice(0, k + 1).join('/');
+        if (!made.has(key)) {
+          const name = path[k].slice(0, 120).trim();
+          made.set(key, p.then((parent) => {
+            const same = folders.find((f) => (parents.get(f.id) ?? null) === parent && f.name.toLowerCase() === name.toLowerCase() && canAdd(f.id));
+            return same ? same.id : F.createFolder(name, parent);
+          }));
+        }
+        p = made.get(key);
+      });
+      return p;
+    };
+    const failed = [];
+    for (const it of items) {
+      try {
+        await F.uploadSop(it.doc, it.title, await ensureFolder(it.folders));
+      } catch (e) {
+        failed.push(`• ${it.name}: ${e.message}`);
+      }
+      importing.done++;
+    }
+    const ok = items.length - failed.length;
+    importing = null;
+    if (target) expanded.add(target);
+    await refresh();
+    if (failed.length) ui.alert(`${ok} RPS berhasil diimpor, ${failed.length} gagal:\n${list(failed)}`, { title: 'Impor RPS' });
+    else onnotify(`${ok} RPS diimpor ke ${placeName(target)}`);
+  }
 
   async function act(fn, done) {
     try {
@@ -419,7 +499,8 @@
     return [
       { label: 'RPS baru di sini', run: () => newSop(id), disabled: !add },
       { label: 'Folder baru di sini', run: () => newFolder(id), disabled: !add },
-      { label: 'Unggah dokumen ini ke sini', run: () => onupload(id), disabled: !add || !cansave }
+      { label: 'Unggah dokumen ini ke sini', run: () => onupload(id), disabled: !add || !cansave },
+      { label: 'Impor ZIP/berkas RPS ke sini…', run: () => pickImport(id), disabled: !add || !!importing }
     ];
   }
   function folderMenu(f) {
@@ -636,10 +717,17 @@
             {@render ib('filePlus', canAdd(here) ? 'RPS baru di sini' : noAddTip, () => newSop(), { disabled: !canAdd(here) })}
             {@render ib('folderPlus', canAdd(here) ? 'Folder baru di sini' : noAddTip, () => newFolder(), { disabled: !canAdd(here) })}
             {@render ib('upload', uploadTip, () => onupload(here), { disabled: !!uploadBlocked })}
+            {@render ib('import', !canAdd(here) ? noAddTip : 'Impor ZIP berisi berkas .rps (atau .rps/.json/PDF) ke sini — bisa juga diseret ke daftar', () => pickImport(), { disabled: !canAdd(here) || !!importing })}
             {@render ib('refresh', 'Muat ulang daftar', refresh)}
           </div>
+          {#if importing}
+            <div class="importing" role="status">
+              <span>Mengimpor {importing.done} dari {importing.total} RPS…</span>
+              <div class="meter"><span style:width="{(importing.done / importing.total) * 100}%"></span></div>
+            </div>
+          {/if}
           <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <ul class="list" class:drop={!searching && drag && dropAt === here} oncontextmenu={(e) => openMenu(e, hereItems(here))} {...(searching ? {} : dropzone(here))}>
+          <ul class="list" class:drop={!searching && dropAt !== undefined && dropAt === here} oncontextmenu={(e) => openMenu(e, hereItems(here))} {...(searching ? {} : dropzone(here))}>
             {#each shownFolders as f (f.id)}
               {@const parent = parents.get(f.id)}
               <li class:drop={dropAt === f.id} class:dragging={drag?.item === f} draggable={canManage(f)} ondragstart={(e) => dragStart(e, f, true)} ondragend={dragEnd} {...dropzone(f.id)} oncontextmenu={(e) => openMenu(e, folderMenu(f))}>
@@ -694,7 +782,10 @@
               </li>
             {/each}
             {#if !shownFolders.length && !shownLive.length}
-              <li class="empty">{busy ? 'Memuat…' : searching ? 'Tidak ada yang cocok.' : here ? 'Folder ini masih kosong.' : 'Belum ada folder atau RPS di sini.'}</li>
+              <li class="empty">
+                {busy ? 'Memuat…' : searching ? 'Tidak ada yang cocok.' : here ? 'Folder ini masih kosong.' : 'Belum ada folder atau RPS di sini.'}
+                {#if !busy && !searching && canAdd(here)}<small>Seret ZIP berisi berkas .rps ke sini untuk mengimpor banyak RPS sekaligus.</small>{/if}
+              </li>
             {/if}
           </ul>
         {:else if view === 'bin'}
@@ -818,6 +909,14 @@
       {/if}
     </div>
   {/if}
+  <input
+    bind:this={importInput}
+    type="file"
+    multiple
+    hidden
+    accept=".zip,.rps,.json,.pdf,application/zip,application/json,application/pdf"
+    onchange={(e) => importFiles([...e.currentTarget.files], e.currentTarget.dataset.target || null)}
+  />
   {#if menu}<ContextMenu x={menu.x} y={menu.y} items={menu.items} {host} onclose={() => (menu = null)} />{/if}
 
 <dialog bind:this={moveDialog} class="dialog small-dialog" onclose={() => (moving = null)}>
@@ -1328,6 +1427,23 @@
     display: block;
     height: 100%;
     background: var(--accent);
+  }
+  .importing {
+    margin: 0 0 0.4rem;
+    font-size: 0.82rem;
+    color: var(--muted);
+  }
+  .importing .meter {
+    margin: 0.25rem 0 0;
+    height: 6px;
+  }
+  .meter span {
+    transition: width 0.2s;
+  }
+  .empty small {
+    flex-basis: 100%;
+    text-align: center;
+    font-size: 0.8rem;
   }
   .row {
     display: flex;
