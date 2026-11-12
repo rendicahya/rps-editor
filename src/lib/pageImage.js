@@ -2,7 +2,7 @@
 // Primitifnya sama dengan pratinjau dan PDF; teks memakai font dokumen (FontFace "SOPDoc", lihat fonts.js).
 import { baseline, PT } from './layout.js';
 
-const FONT = 'SOPDoc, Calibri, Carlito, sans-serif';
+export const FONT = 'SOPDoc, Calibri, Carlito, sans-serif';
 
 const loadImage = (src) =>
   new Promise((resolve, reject) => {

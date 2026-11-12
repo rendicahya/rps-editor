@@ -47,6 +47,9 @@ Sudah ada:
   - Pilih banyak item dengan Ctrl/Shift+klik, lalu pindahkan (seret, potong-tempel, atau keyboard) atau hapus
     sekaligus. Pemindahan dan pemindahan ke Recycle bin bisa diurungkan dari pesan yang muncul (atau Ctrl+Z).
   - Daftar Lokal dan Daring bisa diurutkan menurut nama atau waktu terakhir diubah.
+  - **Riwayat lama bisa dihapus** oleh pemilik RPS dan admin: per versi, atau sekaligus lewat **Hapus riwayat lama…**
+    dengan menyisakan sejumlah versi terbaru (0 = seluruh riwayat; isi saat ini tetap utuh). Ruangnya dikembalikan ke
+    kuota pustaka. Tidak bisa dibatalkan.
   - **Unggah banyak sekaligus**: seret berkas `.rps` atau ZIP berisi `.rps` ke daftar atau ke
     folder di pohon (atau tombol unggah berkas / menu klik kanan), maksimal 500 berkas. Subfolder di dalam ZIP dibuat
     ulang; folder bernama sama yang milik Anda dipakai. PDF hasil ekspor RPS Editor juga diterima. Berkas yang tidak
@@ -69,6 +72,11 @@ Sudah ada:
   seperti Firefox mengabaikannya), atau **Gambar** (tiap halaman menjadi gambar 250 dpi sehingga teks sama sekali
   tidak bisa diseleksi; berkas lebih besar). PDF yang dikunci atau berupa gambar tidak berisi data RPS, jadi tidak bisa
   dibuka lagi di editor.
+  Pilihan **Watermark** menambahkan teks miring dan samar di tengah setiap halaman: DRAFT, SALINAN TERKENDALI,
+  SALINAN TIDAK TERKENDALI, RAHASIA, CONTOH, atau teks lain (maks. 60 karakter). Watermark hanya ada di PDF.
+- **Properti dokumen** (tombol di pratinjau PDF): judul, penulis, subjek, dan kata kunci di metadata PDF. Disimpan di
+  dalam berkas `.rps` (ikut Undo dan Pustaka Daring). Kolom kosong memakai bawaan: judul "RPS <mata kuliah>", penulis
+  dari dosen pengelola, subjek "Rencana Pembelajaran Semester <kode>, Program Studi <prodi>".
 
 Rencana berikutnya:
 1. Seret-lepas untuk mengurutkan baris.
@@ -115,7 +123,9 @@ Aplikasi ini berbagi origin dengan aplikasi lain di GitHub Pages, jadi semua kun
                   "materi": "...", "pustaka": ["p1"], "bobot": 0.5 }],
   "lembarKerja": [{ "id": "lk1", "kode": "LK-1", "judul": "...", "asesmen": "a1", "subCpmk": ["s1"],
                     "bentukAktivitas": "...", "deskripsi": "...", "metode": "...", "luaran": "...",
-                    "indikator": "...", "jadwal": "...", "lainLain": "...", "rujukan": "..." }]
+                    "indikator": "...", "jadwal": "...", "lainLain": "...", "rujukan": "..." }],
+  // opsional: properti dokumen untuk metadata PDF; kolom yang tidak ada memakai nilai bawaan
+  "meta": { "title": "...", "author": "...", "subject": "...", "keywords": "..." }
 }
 ```
 

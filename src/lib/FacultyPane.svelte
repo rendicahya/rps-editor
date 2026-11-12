@@ -828,6 +828,42 @@
     }
   }
 
+  const reloadHistory = async (s) => {
+    if (history?.id === s.id) history = { id: s.id, versions: await F.listVersions(s.id) };
+  };
+  const sumSize = (vs) => vs.reduce((a, v) => a + (v.size ?? 0), 0);
+
+  /** Menghapus versi riwayat `list` satu per satu (pemilik dan admin). */
+  async function pruneMany(s, list, done) {
+    await act(async () => {
+      for (const v of list) await F.pruneVersion(s.id, v.rev);
+    }, done);
+    await reloadHistory(s).catch(() => {});
+  }
+
+  async function pruneOne(s, v) {
+    const msg = `Hapus versi ${when(v.savedAt)} (${v.savedByName}) dari riwayat "${titleOf(s)}"?\n\nVersi ini tidak bisa dikembalikan lagi.`;
+    if (!(await ui.confirm(msg, { title: 'Hapus versi', ok: 'Hapus', danger: true }))) return;
+    pruneMany(s, [v], 'Versi dihapus dari riwayat');
+  }
+
+  /** Menyisakan sejumlah versi terbaru; sisanya dihapus. */
+  async function pruneOld(s) {
+    const versions = history?.id === s.id ? history.versions : await F.listVersions(s.id);
+    if (!versions.length) return ui.alert('RPS ini belum punya versi lama.');
+    const raw = await ui.prompt(`Simpan berapa versi terbaru? Versi yang lebih lama dihapus. Isi 0 untuk menghapus seluruh riwayat (isi saat ini tetap utuh).\n\nSaat ini ada ${versions.length} versi lama (${size(sumSize(versions))}).`, String(Math.min(5, versions.length - 1)), { title: 'Hapus riwayat lama', ok: 'Lanjut', type: 'number' });
+    if (raw == null) return;
+    const keep = Math.floor(Number(raw));
+    if (!Number.isFinite(keep) || keep < 0) return ui.alert('Isi dengan angka 0 atau lebih.');
+    const drop = versions.slice(keep); // urut dari yang terbaru
+    if (!drop.length) return ui.alert(`Riwayat sudah berisi ${versions.length} versi atau kurang; tidak ada yang dihapus.`);
+    const oldest = drop.at(-1);
+    const msg = `Hapus ${drop.length} versi lama "${titleOf(s)}" (${size(sumSize(drop))}), dari ${when(oldest.savedAt)} sampai ${when(drop[0].savedAt)}?` +
+      `\n\n${keep ? `${keep} versi terbaru tetap disimpan.` : 'Seluruh riwayat dihapus; isi saat ini tetap utuh.'} Tindakan ini tidak bisa dibatalkan.`;
+    if (!(await ui.confirm(msg, { title: 'Hapus riwayat lama', ok: `Hapus ${drop.length} versi`, danger: true }))) return;
+    pruneMany(s, drop, `${drop.length} versi lama dihapus`);
+  }
+
   async function restoreVersion(s, v) {
     const msg = `Kembalikan isi "${titleOf(s)}" ke versi ${when(v.savedAt)}? Isi saat ini tetap tersimpan di Riwayat.`;
     if (!(await ui.confirm(msg, { ok: 'Kembalikan' }))) return;
@@ -931,6 +967,7 @@
       { sep: true },
       { label: 'Duplikat', icon: 'copy', run: () => duplicate(s) },
       { label: 'Riwayat', icon: 'history', run: () => toggleHistory(s) },
+      ...(manage ? [{ label: 'Hapus riwayat lama…', icon: 'trash', run: () => pruneOld(s) }] : []),
       { label: accessTip(s), icon: 'users', run: () => openAccess('sops', s) },
       ...(canEdit(s) ? [{ label: 'Ubah nama', icon: 'pencil', hint: 'F2', run: () => rename(s) }] : []),
       ...(manage
@@ -1206,12 +1243,23 @@
                 </span>
                 {#if history?.id === s.id}
                   <div class="history">
+                    {#if manage && history.versions.length}
+                      <div class="hhead">
+                        <span class="muted">{history.versions.length} versi lama · {size(sumSize(history.versions))}</span>
+                        <button type="button" class="link" onclick={() => pruneOld(s)}>Hapus riwayat lama…</button>
+                      </div>
+                    {/if}
                     {#each history.versions as v (v.rev)}
                       <div>
                         <span>{when(v.savedAt)} · {v.savedByName}</span>
-                        {#if canEdit(s)}
-                          {@render ib('restore', isOpen(s) ? 'Tutup tabnya dulu untuk mengembalikan versi' : 'Kembalikan versi ini', () => restoreVersion(s, v), { disabled: isOpen(s) })}
-                        {/if}
+                        <span class="hacts">
+                          {#if canEdit(s)}
+                            {@render ib('restore', isOpen(s) ? 'Tutup tabnya dulu untuk mengembalikan versi' : 'Kembalikan versi ini', () => restoreVersion(s, v), { disabled: isOpen(s) })}
+                          {/if}
+                          {#if manage}
+                            {@render ib('trash', 'Hapus versi ini dari riwayat', () => pruneOne(s, v), { danger: true })}
+                          {/if}
+                        </span>
                       </div>
                     {:else}
                       <span class="muted">Belum ada versi lama.</span>
@@ -1855,6 +1903,25 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.5rem;
+  }
+  .history .hhead {
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .history .hacts {
+    display: flex;
+    gap: 0.15rem;
+  }
+  .history .link {
+    border: 0;
+    background: none;
+    padding: 0;
+    color: var(--danger);
+    font: inherit;
+    cursor: pointer;
+  }
+  .history .link:hover {
+    text-decoration: underline;
   }
   .empty {
     justify-content: center;

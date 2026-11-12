@@ -99,11 +99,11 @@
     <h3><span class="num">1</span><span>{#if draft.mode === 'import'}Lampirkan RPS lama ke AI{:else if draft.mode === 'revise'}Tulis instruksi revisi{:else}Tulis deskripsi mata kuliah{/if}</span></h3>
     {#if draft.mode === 'revise'}
       <label class="field">
-        <textarea rows="4" aria-label="Instruksi revisi" bind:value={draft.instruction} placeholder="Contoh: tambahkan Lembar Kerja untuk CB-2; tulis ulang indikator pertemuan agar terukur; sesuaikan bobot pertemuan agar total 100%."></textarea>
+        <textarea class="big" rows="10" aria-label="Instruksi revisi" bind:value={draft.instruction} placeholder="Contoh: tambahkan Lembar Kerja untuk CB-2; tulis ulang indikator pertemuan agar terukur; sesuaikan bobot pertemuan agar total 100%."></textarea>
       </label>
     {:else if draft.mode === 'new'}
       <label class="field">
-        <textarea rows="5" aria-label="Deskripsi mata kuliah" bind:value={draft.description} placeholder="Contoh: Basis Data (COM60023), prodi Teknik Informatika, 3 SKS (2 teori, 1 praktikum), semester genap 2025/2026, wajib. Dosen: … CPL005, CPMK-061 … Pokok bahasan: model relasional, SQL, normalisasi, transaksi. Penilaian: 2 tugas case based, kuis, UTS, UAS, praktikum."></textarea>
+        <textarea class="big" rows="10" aria-label="Deskripsi mata kuliah" bind:value={draft.description} placeholder="Contoh: Basis Data (COM60023), prodi Teknik Informatika, 3 SKS (2 teori, 1 praktikum), semester genap 2025/2026, wajib. Dosen: … CPL005, CPMK-061 … Pokok bahasan: model relasional, SQL, normalisasi, transaksi. Penilaian: 2 tugas case based, kuis, UTS, UAS, praktikum."></textarea>
       </label>
       <small class="hint">Sebutkan kode dan teks CPL/CPMK dari kurikulum bila ada; atau pakai tombol Kurikulum setelah hasilnya dibuka.</small>
     {:else}
@@ -113,7 +113,7 @@
         <span>Salin nama universitas dan fakultas dari dokumen (bila tidak, diisi Universitas Brawijaya, FILKOM)</span>
       </label>
       <label class="field">
-        <textarea rows="2" aria-label="Catatan untuk AI (opsional)" bind:value={draft.note} placeholder="Catatan untuk AI (opsional). Contoh: tahun akademik diganti 2026/2027; tanggal penyusunan diganti hari ini."></textarea>
+        <textarea rows="4" aria-label="Catatan untuk AI (opsional)" bind:value={draft.note} placeholder="Catatan untuk AI (opsional). Contoh: tahun akademik diganti 2026/2027; tanggal penyusunan diganti hari ini."></textarea>
       </label>
     {/if}
   </section>
@@ -163,7 +163,7 @@
 
 <style>
   .dialog {
-    width: min(560px, calc(100vw - 2rem));
+    width: min(820px, calc(100vw - 2rem));
     border: 0;
     border-radius: 14px;
     padding: 1.1rem 1.2rem;
@@ -272,6 +272,12 @@
     width: 100%;
     font-family: ui-monospace, Consolas, monospace;
     font-size: 0.78rem;
+  }
+  .big {
+    width: 100%;
+    min-height: min(14rem, 35dvh);
+    resize: vertical;
+    line-height: 1.5;
   }
   .paste {
     display: block;

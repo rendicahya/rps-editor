@@ -203,6 +203,49 @@ export function emptyDocument() {
   };
 }
 
+// ---- Properti dokumen (metadata berkas ekspor) ----
+// doc.meta: { title?, author?, subject?, keywords? }. Kolom kosong memakai nilai bawaan dari identitas RPS.
+export const META_FIELDS = [
+  { key: 'title', label: 'Judul', max: 300 },
+  { key: 'author', label: 'Penulis', max: 300 },
+  { key: 'subject', label: 'Subjek', max: 500 },
+  { key: 'keywords', label: 'Kata kunci', max: 500 }
+];
+
+/** Nilai bawaan properti dokumen bila tidak diisi sendiri. */
+export function defaultMeta(doc) {
+  const id = doc.identitas ?? {};
+  const t = (v) => plainText(String(v ?? '')).trim();
+  const dosen = (id.dosenPengelola ?? []).map(t).filter(Boolean);
+  const kode = t(id.kode);
+  const prodi = t(id.prodi);
+  return {
+    title: `RPS ${docTitle(doc)}`.trim(),
+    author: dosen.join(', ') || t(id.koordinator) || t(id.fakultas),
+    subject: `Rencana Pembelajaran Semester${kode ? ` ${kode}` : ''}${prodi ? `, Program Studi ${prodi.replace(/^program studi\s+/i, '')}` : ''}`,
+    keywords: ''
+  };
+}
+
+/** Properti dokumen yang dipakai saat ekspor: isian sendiri, selain itu nilai bawaan. */
+export function docMeta(doc) {
+  const d = defaultMeta(doc);
+  const out = {};
+  for (const { key } of META_FIELDS) out[key] = doc.meta?.[key]?.trim() || d[key];
+  return out;
+}
+
+/** Menyimpan properti dokumen; kolom kosong kembali ke bawaan, `doc.meta` dihapus bila semuanya kosong. */
+export function setMeta(doc, values) {
+  const meta = {};
+  for (const { key, max } of META_FIELDS) {
+    const v = plainText(String(values?.[key] ?? '')).replace(/\s+/g, ' ').trim().slice(0, max);
+    if (v) meta[key] = v;
+  }
+  if (Object.keys(meta).length) doc.meta = meta;
+  else delete doc.meta;
+}
+
 /** Isian identitas yang boleh berformat (tebal/miring/garis bawah, daftar). Isian lain teks polos. */
 export const RICH_IDENTITAS = new Set(['deskripsi', 'materi', 'mediaLunak', 'mediaKeras', 'pengalamanBelajar', 'prasyarat']);
 
@@ -341,5 +384,9 @@ export function normalizeDocument(raw) {
     l.subCpmk = refs('subCpmk', l.subCpmk);
   }
 
-  return { format: FORMAT, version: VERSION, identitas, pustaka, cpl, cpmk, subCpmk, asesmen, pertemuan, lembarKerja };
+  const out = { format: FORMAT, version: VERSION, identitas, pustaka, cpl, cpmk, subCpmk, asesmen, pertemuan, lembarKerja };
+  if (raw.meta && typeof raw.meta === 'object') {
+    setMeta(out, Object.fromEntries(META_FIELDS.map(({ key }) => [key, plain(raw.meta[key])])));
+  }
+  return out;
 }

@@ -2,7 +2,7 @@
   import { onMount, tick, untrack } from 'svelte';
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
   import { app, persist, tabs, stash, newTabId, saveSession, loadSession } from './lib/store.svelte.js';
-  import { emptyDocument, parseDocumentText, docTitle, importCatalog } from './lib/model.js';
+  import { emptyDocument, parseDocumentText, docTitle, importCatalog, setMeta } from './lib/model.js';
   import CurriculumDialog from './lib/CurriculumDialog.svelte';
   import AiDialog from './lib/AiDialog.svelte';
   import { sampleDocument } from './lib/sample.js';
@@ -26,6 +26,7 @@
   import * as ui from './lib/ask.svelte.js';
   import * as Faculty from './lib/faculty.svelte.js';
   import { faculty } from './lib/faculty.svelte.js';
+  import DocMetaDialog from './lib/DocMetaDialog.svelte';
 
   let toast = $state(null); // { msg, action, n }
   let toastTimer;
@@ -612,6 +613,8 @@
     try {
       const doc = parseDocumentText(text);
       if (revise) {
+        const old = $state.snapshot(app.doc);
+        if (!doc.meta && old.meta) doc.meta = old.meta;
         replaceDocument(doc, app.fileName, app.fileHandle);
         notify('Revisi dari AI diterapkan — periksa kembali isinya (Ctrl+Z untuk membatalkan)');
         return true;
@@ -867,31 +870,42 @@
   let pdfSaved;
   // Perlindungan isi PDF (lihat PDF_PROTECT), diingat per browser.
   let pdfProtect = $state(PDF_PROTECT.includes(getPref('pdfProtect')) ? getPref('pdfProtect') : 'none');
+  // Teks watermark (kosong: tanpa watermark), juga diingat per browser.
+  let pdfWatermark = $state(getPref('pdfWatermark') ?? '');
   let pdfBusy = $state(false);
-  async function pdf() {
-    if (pdfBusy) return;
+  let pdfRun = 0;
+  async function buildPdf() {
+    const run = ++pdfRun;
     pdfBusy = true;
     try {
-      pdfSaved = fileMark();
-      pdfDoc = await exportPdf(app.doc, pdfProtect);
+      const out = await exportPdf(app.doc, { protect: pdfProtect, watermark: pdfWatermark });
+      if (run === pdfRun) pdfDoc = out; // pilihan diganti lagi selagi dibuat: hasil lama dibuang
     } catch (e) {
       ui.alert('Gagal membuat PDF: ' + e.message);
     } finally {
-      pdfBusy = false;
+      if (run === pdfRun) pdfBusy = false;
     }
   }
-  async function setPdfProtect(mode) {
-    pdfProtect = mode;
-    setPref('pdfProtect', mode);
-    if (!pdfDoc) return;
-    pdfBusy = true;
-    try {
-      pdfDoc = await exportPdf(app.doc, mode);
-    } catch (e) {
-      ui.alert('Gagal membuat PDF: ' + e.message);
-    } finally {
-      pdfBusy = false;
-    }
+  function pdf() {
+    if (pdfBusy) return;
+    pdfSaved = fileMark();
+    buildPdf();
+  }
+  /** Pilihan di dialog pratinjau berubah: diingat, lalu PDF dibuat ulang. */
+  function setPdfOptions({ protect = pdfProtect, watermark = pdfWatermark }) {
+    pdfProtect = protect;
+    pdfWatermark = watermark.trim().slice(0, 60);
+    setPref('pdfProtect', pdfProtect);
+    setPref('pdfWatermark', pdfWatermark);
+    if (pdfDoc) buildPdf();
+  }
+
+  // Properti dokumen (metadata berkas ekspor), disimpan di dokumen sehingga ikut tersimpan dan bisa di-Undo.
+  let metaOpen = $state(false);
+  function saveMeta(values) {
+    const before = JSON.stringify(app.doc.meta ?? null);
+    setMeta(app.doc, values);
+    if (JSON.stringify(app.doc.meta ?? null) !== before && pdfDoc) buildPdf();
   }
 
   function onKey(e) {
@@ -1240,8 +1254,10 @@
     bind:pdf={pdfDoc}
     ondownload={() => pdfSaved?.()}
     protect={pdfProtect}
+    watermark={pdfWatermark}
     busy={pdfBusy}
-    onprotect={setPdfProtect}
+    onoptions={setPdfOptions}
+    onmeta={() => (metaOpen = true)}
     {pages}
     filename={`RPS-${slug(docTitle(app.doc))}.pdf`}
     fontNote={docFont === 'calibri' ? '' : 'Calibri belum tersedia, PDF memakai Carlito (ukuran identik)'}
@@ -1288,6 +1304,7 @@
   <CurriculumDialog bind:open={curriculumOpen} onimport={useCatalog} cansave={!empty} />
   <FacultyConflict info={conflict} onchoice={chooseConflict} />
   <CloseConfirm info={closeAsk} onchoice={chooseClose} />
+  <DocMetaDialog doc={app.doc} bind:open={metaOpen} onsave={saveMeta} />
 
   {#if toast}
     {#key toast.n}

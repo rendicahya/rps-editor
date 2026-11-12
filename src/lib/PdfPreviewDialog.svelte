@@ -1,9 +1,32 @@
 <script>
   import Preview from './Preview.svelte';
   import { dismiss } from './dismiss.js';
+  import { WATERMARKS } from './pdf.js';
 
-  /** pdf: objek jsPDF hasil exportPdf; pages: tata letak (cadangan bila browser tak bisa menampilkan PDF). */
-  let { pdf = $bindable(null), pages, filename, fontNote = '', ondownload, protect = 'none', busy = false, onprotect } = $props();
+  /**
+   * pdf: objek jsPDF hasil exportPdf; pages: tata letak (cadangan bila browser tak bisa menampilkan PDF).
+   * protect, watermark: pilihan saat ini; onoptions({ protect?, watermark? }) membuat ulang PDF.
+   */
+  let { pdf = $bindable(null), pages, filename, fontNote = '', ondownload, protect = 'none', watermark = '', busy = false, onoptions, onmeta } = $props();
+
+  // Watermark: '' (tanpa), salah satu WATERMARKS, atau 'custom' dengan teks bebas.
+  let wmChoice = $state('');
+  let wmText = $state('');
+  $effect(() => {
+    const w = watermark;
+    const c = !w ? '' : WATERMARKS.includes(w) ? w : 'custom';
+    wmChoice = c;
+    if (c === 'custom') wmText = w;
+  });
+  let wmInput = $state();
+  function chooseWatermark(v) {
+    wmChoice = v;
+    if (v !== 'custom') return onoptions?.({ watermark: v });
+    wmText ||= '';
+    queueMicrotask(() => wmInput?.focus());
+    if (wmText.trim()) onoptions?.({ watermark: wmText });
+  }
+  const applyCustom = () => wmText.trim() !== watermark && onoptions?.({ watermark: wmText });
 
   const PROTECT = [
     ['none', 'Bisa disalin', 'Teks bisa diseleksi dan disalin. PDF bisa dibuka lagi di RPS Editor untuk diedit.'],
@@ -62,12 +85,6 @@
       <small>{size}{fontNote ? ' · ' + fontNote : ''}</small>
     </div>
     <div class="actions">
-      <label class="protect" title={protectInfo[2]}>
-        <span>Isi PDF</span>
-        <select value={protect} disabled={busy} onchange={(e) => onprotect?.(e.currentTarget.value)} aria-label="Perlindungan isi PDF">
-          {#each PROTECT as [v, label] (v)}<option value={v}>{label}</option>{/each}
-        </select>
-      </label>
       <label class="fname" title="Nama berkas PDF yang diunduh">
         <input bind:value={name} aria-label="Nama berkas PDF" onkeydown={(e) => e.key === 'Enter' && download()} />
         <span>.pdf</span>
@@ -76,8 +93,40 @@
       <button type="button" class="btn primary" disabled={busy} onclick={download}>Unduh PDF</button>
     </div>
   </header>
+  <div class="opts">
+    <label title={protectInfo[2]}>
+      <span>Isi PDF</span>
+      <select value={protect} disabled={busy} onchange={(e) => onoptions?.({ protect: e.currentTarget.value })} aria-label="Perlindungan isi PDF">
+        {#each PROTECT as [v, label] (v)}<option value={v}>{label}</option>{/each}
+      </select>
+    </label>
+    <label title="Teks miring dan samar di tengah setiap halaman">
+      <span>Watermark</span>
+      <select value={wmChoice} onchange={(e) => chooseWatermark(e.currentTarget.value)} aria-label="Watermark">
+        <option value="">Tanpa</option>
+        {#each WATERMARKS as w (w)}<option value={w}>{w}</option>{/each}
+        <option value="custom">Teks lain…</option>
+      </select>
+    </label>
+    {#if wmChoice === 'custom'}
+      <input
+        bind:this={wmInput}
+        bind:value={wmText}
+        class="wm-text"
+        maxlength="60"
+        placeholder="Ketik teks watermark, lalu Enter"
+        aria-label="Teks watermark"
+        onchange={applyCustom}
+        onkeydown={(e) => e.key === 'Enter' && (e.preventDefault(), applyCustom())}
+      />
+    {/if}
+    {#if onmeta}
+      <button type="button" class="btn ghost meta" onclick={onmeta} title="Judul, penulis, subjek, dan kata kunci di metadata PDF">Properti dokumen…</button>
+    {/if}
+    {#if busy}<span class="busy">Membuat ulang PDF…</span>{/if}
+  </div>
   {#if protect !== 'none'}
-    <p class="protect-note">{busy ? 'Membuat ulang PDF…' : protectInfo[2]}</p>
+    <p class="protect-note">{protectInfo[2]}</p>
   {/if}
   {#if url}
     {#if inline}
@@ -139,15 +188,34 @@
     flex-wrap: wrap;
     align-items: center;
   }
-  .protect {
+  .opts {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    padding: 0.5rem 1rem;
+    border-bottom: 1px solid var(--line);
+    font-size: 0.85rem;
+  }
+  .opts label {
     display: flex;
     align-items: center;
     gap: 0.4rem;
-    font-size: 0.85rem;
     color: var(--muted);
   }
-  .protect select {
+  .opts select {
     width: auto;
+  }
+  .opts .wm-text {
+    width: min(18rem, 60vw);
+  }
+  .opts .meta {
+    padding: 0.25rem 0.6rem;
+    font-size: 0.85rem;
+  }
+  .busy {
+    color: var(--muted);
+    font-style: italic;
   }
   .protect-note {
     margin: 0;

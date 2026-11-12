@@ -3,7 +3,7 @@ import { layoutDocument, baseline, PT } from './layout.js';
 import { pdfFont, registerFonts } from './fonts.js';
 import { zlibSync, unzlibSync, strToU8, strFromU8 } from 'fflate';
 import { slug } from './files.js';
-import { docTitle } from './model.js';
+import { docTitle, docMeta } from './model.js';
 
 const orientation = (page) => (page.w > page.h ? 'landscape' : 'portrait');
 
@@ -25,7 +25,7 @@ function newPdf(doc, first, protect) {
     // Kata sandi pemilik acak: tidak ada yang bisa membuka PDF dengan hak penuh untuk mencabut larangan.
     ...(protect !== 'none' && { encryption: { userPassword: '', ownerPassword: randomPassword(), userPermissions: ['print'] } })
   });
-  pdf.setProperties({ title: `RPS ${docTitle(doc)}`.trim(), creator: 'RPS Editor' });
+  pdf.setProperties({ ...docMeta(doc), creator: 'RPS Editor' });
   return pdf;
 }
 
@@ -35,16 +35,70 @@ function randomPassword() {
   return Array.from(a, (b) => (b % 94) + 33).map((c) => String.fromCharCode(c)).join('');
 }
 
-export async function exportPdf(doc, protect = 'none') {
+/** Teks watermark siap pakai (selain itu teks bebas). */
+export const WATERMARKS = ['DRAFT', 'SALINAN TERKENDALI', 'SALINAN TIDAK TERKENDALI', 'RAHASIA', 'CONTOH'];
+const WM_GRAY = 128;
+const WM_OPACITY = 0.16;
+const WM_MAX_PT = 150;
+const IMAGE_DPI = 250;
+
+/** Sudut diagonal halaman dan ukuran font (pt) agar lebar teks ≈ 70% diagonal. `width1` = lebar teks pada 1 pt (mm). */
+function wmGeometry(page, width1) {
+  const angle = Math.atan2(page.h, page.w);
+  const size = Math.min(WM_MAX_PT, (0.7 * Math.hypot(page.w, page.h)) / width1);
+  return { angle, size };
+}
+
+/** Watermark miring dan transparan di atas isi halaman (vektor). */
+function drawWatermark(pdf, page, text) {
+  pdf.saveGraphicsState();
+  pdf.setGState(new pdf.GState({ opacity: WM_OPACITY }));
+  pdf.setFont(pdfFont(), 'bold');
+  pdf.setFontSize(1);
+  const { angle, size } = wmGeometry(page, pdf.getTextWidth(text));
+  pdf.setFontSize(size);
+  pdf.setTextColor(WM_GRAY, WM_GRAY, WM_GRAY);
+  const w = pdf.getTextWidth(text);
+  const cap = size * PT * 0.64; // tinggi huruf kapital Calibri
+  const [c, s] = [Math.cos(angle), Math.sin(angle)];
+  // Titik awal baseline sehingga teks berpusat di tengah halaman, naik dari kiri bawah ke kanan atas.
+  const x = page.w / 2 - (w / 2) * c + (cap / 2) * s;
+  const y = page.h / 2 + (w / 2) * s + (cap / 2) * c;
+  pdf.text(text, x, y, { angle: (angle * 180) / Math.PI });
+  pdf.restoreGraphicsState();
+}
+
+/** Watermark yang sama pada canvas halaman (mode Gambar). */
+function paintWatermark(canvas, page, text, font) {
+  const g = canvas.getContext('2d');
+  const S = canvas.width / page.w;
+  g.save();
+  g.font = `700 ${PT * S}px ${font}`;
+  const { angle, size } = wmGeometry(page, g.measureText(text).width / S);
+  g.font = `700 ${size * PT * S}px ${font}`;
+  g.translate(canvas.width / 2, canvas.height / 2);
+  g.rotate(-angle);
+  g.globalAlpha = WM_OPACITY;
+  g.fillStyle = `rgb(${WM_GRAY} ${WM_GRAY} ${WM_GRAY})`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, 0, 0);
+  g.restore();
+}
+
+/** opts: { protect: lihat PDF_PROTECT, watermark: teks (kosong = tanpa watermark) }. */
+export async function exportPdf(doc, { protect = 'none', watermark = '' } = {}) {
   const pages = layoutDocument(doc);
   const pdf = newPdf(doc, pages[0], protect);
+  const wm = watermark.replace(/\s+/g, ' ').trim();
   if (protect === 'image') {
-    const { renderPage, loadDocFonts } = await import('./pageImage.js');
+    const { renderPage, loadDocFonts, FONT } = await import('./pageImage.js');
     await loadDocFonts();
     const images = new Map();
     for (let i = 0; i < pages.length; i++) {
       if (i > 0) pdf.addPage('a4', orientation(pages[i]));
-      const canvas = await renderPage(pages[i], images, 250);
+      const canvas = await renderPage(pages[i], images, IMAGE_DPI);
+      if (wm) paintWatermark(canvas, pages[i], wm, FONT);
       pdf.addImage(canvas, 'PNG', 0, 0, pages[i].w, pages[i].h, undefined, 'FAST');
     }
     return pdf;
@@ -54,6 +108,7 @@ export async function exportPdf(doc, protect = 'none') {
   pages.forEach((page, i) => {
     if (i > 0) pdf.addPage('a4', orientation(page));
     for (const it of page.items) drawItem(pdf, it);
+    if (wm) drawWatermark(pdf, page, wm);
   });
   if (protect === 'none') attachRps(pdf, doc);
   return pdf;

@@ -525,6 +525,11 @@ textarea:focus {
 .export-menu button:focus-visible {
   background: var(--surface-2);
 }
+.export-menu button.sep {
+  border-top: 1px solid var(--line);
+  margin-top: 0.2rem;
+  padding-top: 0.55rem;
+}
 .export-menu small {
   color: var(--muted);
   font-size: 0.75rem;
