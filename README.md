@@ -52,7 +52,7 @@ Sudah ada:
     kuota pustaka. Tidak bisa dibatalkan.
   - **Unggah banyak sekaligus**: seret berkas `.rps` atau ZIP berisi `.rps` ke daftar atau ke
     folder di pohon (atau tombol unggah berkas / menu klik kanan), maksimal 500 berkas. Subfolder di dalam ZIP dibuat
-    ulang; folder bernama sama yang milik Anda dipakai. PDF hasil ekspor RPS Editor juga diterima. Berkas yang tidak
+    ulang; folder bernama sama yang milik Anda dipakai. PDF dan DOCX hasil ekspor RPS Editor juga diterima. Berkas yang tidak
     terbaca dilewati dan disebutkan alasannya; unggahan berhenti bila penyimpanan penuh.
 - **Katalog Kurikulum** (tombol **Kurikulum**): CPL dan CPMK per prodi di Pustaka Daring.
   - Admin menambah/menghapus prodi dan menunjuk **pengelola prodi** (email).
@@ -74,8 +74,13 @@ Sudah ada:
   dibuka lagi di editor.
   Pilihan **Watermark** menambahkan teks miring dan samar di tengah setiap halaman: DRAFT, SALINAN TERKENDALI,
   SALINAN TIDAK TERKENDALI, RAHASIA, CONTOH, atau teks lain (maks. 60 karakter). Watermark hanya ada di PDF.
-- **Properti dokumen** (tombol di pratinjau PDF): judul, penulis, subjek, dan kata kunci di metadata PDF. Disimpan di
-  dalam berkas `.rps` (ikut Undo dan Pustaka Daring). Kolom kosong memakai bawaan: judul "RPS <mata kuliah>", penulis
+- **Ekspor Word (.docx)** (menu Ekspor): tabel Word biasa yang bisa diedit, dengan bagian dan orientasi sama seperti
+  PDF (sampul potret, identitas/matriks/tabel pertemuan lanskap, Lembar Kerja potret). Kepala tabel pertemuan diulang
+  di setiap halaman, dan baris panjang dibiarkan terbelah oleh Word, sehingga letak pergantian halaman bisa sedikit
+  berbeda dari PDF. Data `.rps` ikut disimpan di dalam DOCX: berkas Word ini bisa dibuka lagi di editor dan diunggah ke
+  Pustaka Daring.
+- **Properti dokumen** (menu Ekspor, atau tombol di pratinjau PDF): judul, penulis, subjek, dan kata kunci di
+  metadata PDF dan DOCX. Disimpan di dalam berkas `.rps` (ikut Undo dan Pustaka Daring). Kolom kosong memakai bawaan: judul "RPS <mata kuliah>", penulis
   dari dosen pengelola, subjek "Rencana Pembelajaran Semester <kode>, Program Studi <prodi>".
 
 Rencana berikutnya:

@@ -246,6 +246,20 @@ export function setMeta(doc, values) {
   else delete doc.meta;
 }
 
+/** Isi docProps/core.xml (DOCX) dari properti dokumen. */
+export function officeCoreXml(doc, now) {
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const m = docMeta(doc);
+  const tag = (t, v) => (v ? `<${t}>${esc(v)}</${t}>` : '');
+  return (
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n` +
+    `<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" ` +
+    `xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">` +
+    tag('dc:title', m.title) + tag('dc:subject', m.subject) + tag('dc:creator', m.author || 'RPS Editor') + tag('cp:keywords', m.keywords) +
+    `<dcterms:created xsi:type="dcterms:W3CDTF">${now}</dcterms:created></cp:coreProperties>`
+  );
+}
+
 /** Isian identitas yang boleh berformat (tebal/miring/garis bawah, daftar). Isian lain teks polos. */
 export const RICH_IDENTITAS = new Set(['deskripsi', 'materi', 'mediaLunak', 'mediaKeras', 'pengalamanBelajar', 'prasyarat']);
 

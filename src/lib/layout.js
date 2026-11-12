@@ -11,7 +11,7 @@ import { formatTanggal, formatAngka, SEMESTER, SIFAT } from './model.js';
 import { hasList, hasMarkup, parseRich, plainText, setMarkerMeasure, wrapRuns } from './richtext.js';
 import logoSrc from '../assets/logo-ub.png?inline';
 
-const LOGO = { src: logoSrc, width: 418, height: 420 };
+export const LOGO = { src: logoSrc, width: 418, height: 420 };
 
 export const A4 = { short: 210, long: 297 };
 export const PT = 25.4 / 72;

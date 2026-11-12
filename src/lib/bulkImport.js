@@ -1,10 +1,11 @@
 // Membaca banyak RPS sekaligus untuk diimpor ke Pustaka Daring: berkas .zip (boleh berisi subfolder),
-// .rps/.json, dan PDF hasil ekspor RPS Editor (data .rps tersemat).
+// .rps/.json, dan PDF/DOCX hasil ekspor RPS Editor (data .rps tersemat).
 import { unzipSync, strFromU8 } from 'fflate';
 import { parseDocumentText, docTitle } from './model.js';
 import { rpsFromPdf } from './pdf.js';
+import { rpsFromDocx } from './docxData.js';
 
-const RPS_EXT = /\.(rps|json|pdf)$/i;
+const RPS_EXT = /\.(rps|json|pdf|docx)$/i;
 const MAX_FILES = 500; // sama dengan SOP Editor
 const MAX_ENTRY =8 * 1024 * 1024; // per berkas di dalam ZIP (PDF bisa jauh lebih besar dari .rps-nya)
 const MAX_TOTAL = 300 * 1024 * 1024; // total isi ZIP setelah diekstrak, pengaman ZIP bom
@@ -20,6 +21,9 @@ function readOne(name, bytes) {
   if (/\.pdf$/i.test(name)) {
     text = rpsFromPdf(bytes);
     if (!text) throw new Error('PDF ini bukan hasil ekspor RPS Editor');
+  } else if (/\.docx$/i.test(name)) {
+    text = rpsFromDocx(bytes);
+    if (!text) throw new Error('berkas Word ini bukan hasil ekspor RPS Editor');
   } else {
     text = strFromU8(bytes);
   }
@@ -87,7 +91,7 @@ export async function readRpsFiles(files) {
     } else if (RPS_EXT.test(file.name)) {
       entries.push({ path: baseName(file.name), bytes: new Uint8Array(await file.arrayBuffer()) });
     } else {
-      skipped.push({ name: file.name, reason: 'bukan berkas .zip, .rps, .json, atau .pdf' });
+      skipped.push({ name: file.name, reason: 'bukan berkas .zip, .rps, .json, .pdf, atau .docx' });
     }
   }
   if (entries.length > MAX_FILES) throw new Error(`Terlalu banyak berkas RPS sekaligus (${entries.length}, maksimal ${MAX_FILES}). Bagi menjadi beberapa ZIP.`);

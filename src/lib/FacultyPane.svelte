@@ -544,7 +544,7 @@
   // ---- Seret dan lepas ----
   // Yang bisa diseret: RPS dan folder yang boleh dipindahkan (pemilik dan admin). Bila yang diseret termasuk pilihan,
   // semua yang dipilih ikut. Tempat lepas: folder di pohon, breadcrumb, folder di daftar, dan area daftar.
-  // Berkas dari luar (ZIP berisi .rps, .rps, .json, PDF hasil ekspor) juga bisa dilepas ke tempat yang sama: diimpor.
+  // Berkas dari luar (ZIP berisi .rps, .rps, .json, PDF/DOCX hasil ekspor) juga bisa dilepas ke tempat yang sama: diimpor.
   let drag = $state(null); // { entries }
   let dropAt = $state(undefined); // id folder yang sedang disorot; null = Utama
   let hoverTimer;
@@ -1406,7 +1406,7 @@
     type="file"
     multiple
     hidden
-    accept=".zip,.rps,.json,.pdf,application/zip,application/json,application/pdf"
+    accept=".zip,.rps,.json,.pdf,.docx,application/zip,application/json,application/pdf"
     onchange={(e) => importFiles([...e.currentTarget.files], e.currentTarget.dataset.target || null)}
   />
   <svelte:window onkeydown={panelKey} />

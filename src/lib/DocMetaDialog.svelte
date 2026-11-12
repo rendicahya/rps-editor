@@ -3,7 +3,7 @@
   import { META_FIELDS, defaultMeta } from './model.js';
 
   /**
-   * Properti dokumen (judul, penulis, subjek, kata kunci) yang masuk ke metadata PDF/DOCX/XLSX.
+   * Properti dokumen (judul, penulis, subjek, kata kunci) yang masuk ke metadata PDF/DOCX.
    * doc: dokumen aktif; open: dialog tampil; onsave(values) menyimpan isian (kosong = bawaan).
    */
   let { doc, open = $bindable(false), onsave } = $props();
@@ -39,8 +39,8 @@
     <form onsubmit={(e) => (e.preventDefault(), save())}>
       <h2>Properti dokumen</h2>
       <p class="hint">
-        Disimpan bersama RPS ini dan dimasukkan ke metadata berkas saat diekspor ke PDF (terlihat di Properti Dokumen
-        pada penampil PDF). Kolom yang dikosongkan memakai isi bawaan yang tampil samar.
+        Disimpan bersama RPS ini dan dimasukkan ke metadata berkas saat diekspor ke PDF atau DOCX (terlihat di Properti
+        Dokumen pada penampil PDF/Word). Kolom yang dikosongkan memakai isi bawaan yang tampil samar.
       </p>
       {#each META_FIELDS as f, i (f.key)}
         <label>

@@ -8,8 +8,9 @@
   import { sampleDocument } from './lib/sample.js';
   import { layoutDocument } from './lib/layout.js';
   import { exportPdf, rpsFromPdf, PDF_PROTECT } from './lib/pdf.js';
+  import { rpsFromDocx } from './lib/docxData.js';
   import { fontSource, useSystemCalibri, useCalibriFiles } from './lib/fonts.js';
-  import { saveJson, openJsonFile, slug, rpsName } from './lib/files.js';
+  import { saveJson, openJsonFile, slug, rpsName, downloadBlob } from './lib/files.js';
   import Preview from './lib/Preview.svelte';
   import FormatBar from './lib/FormatBar.svelte';
   import PdfPreviewDialog from './lib/PdfPreviewDialog.svelte';
@@ -586,12 +587,17 @@
     notify('Contoh RPS dibuka');
   }
 
-  /** Membuka berkas .rps/.json, atau PDF hasil ekspor app ini (data RPS tersimpan sebagai lampiran). */
+  /** Membuka berkas .rps/.json, atau PDF/DOCX hasil ekspor app ini (data RPS tersimpan di dalamnya). */
   async function loadFile(file, handle) {
     if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') {
       const text = rpsFromPdf(new Uint8Array(await file.arrayBuffer()));
-      if (!text) return ui.alert('PDF ini tidak berisi data RPS (bukan hasil ekspor RPS Editor).'), false;
+      if (!text) return ui.alert('PDF ini tidak berisi data RPS (bukan hasil ekspor RPS Editor, atau diekspor dengan isi dikunci/gambar).'), false;
       return loadText(text, rpsName(file.name.replace(/\.pdf$/i, '')), null);
+    }
+    if (/\.docx$/i.test(file.name)) {
+      const text = rpsFromDocx(new Uint8Array(await file.arrayBuffer()));
+      if (!text) return ui.alert('Berkas Word ini tidak berisi data RPS (bukan hasil ekspor RPS Editor). Untuk RPS lama berformat Word, pakai Asisten AI › Impor RPS lama.'), false;
+      return loadText(text, rpsName(file.name.replace(/\.docx$/i, '')), null);
     }
     return loadText(await file.text(), file.name, handle);
   }
@@ -900,6 +906,22 @@
     if (pdfDoc) buildPdf();
   }
 
+  // Ekspor Word dimuat terpisah agar tidak memperbesar muatan awal.
+  let exportBusy = $state('');
+  async function exportDocxFile() {
+    exportBusy = 'DOCX';
+    const saved = fileMark();
+    try {
+      const blob = await (await import('./lib/docx.js')).exportDocx(app.doc);
+      downloadBlob(blob, `RPS-${slug(docTitle(app.doc))}.docx`);
+      saved();
+    } catch (e) {
+      ui.alert('Gagal membuat DOCX: ' + e.message);
+    } finally {
+      exportBusy = '';
+    }
+  }
+
   // Properti dokumen (metadata berkas ekspor), disimpan di dokumen sehingga ikut tersimpan dan bisa di-Undo.
   let metaOpen = $state(false);
   function saveMeta(values) {
@@ -1111,7 +1133,25 @@
           <span class="badge ok">✓</span>
         {/if}
       </button>
-      <button class="btn primary" onclick={() => ((saveOpen = false), pdf())} disabled={empty} title="Pratinjau lalu unduh PDF (Ctrl+Shift+P)">Ekspor PDF</button>
+      <div class="export">
+        <button class="btn primary" onclick={() => ((saveOpen = false), (exportOpen = !exportOpen))} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy || empty}>
+          {exportBusy ? `Membuat ${exportBusy}…` : 'Ekspor'}
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+        </button>
+        {#if exportOpen}
+          <div class="export-menu" role="menu">
+            <button role="menuitem" onclick={() => ((exportOpen = false), pdf())}>
+              <strong>PDF</strong><small>Pratinjau lalu unduh · Ctrl+Shift+P</small>
+            </button>
+            <button role="menuitem" onclick={() => ((exportOpen = false), exportDocxFile())}>
+              <strong>Word (.docx)</strong><small>Tabel Word yang bisa diedit; bisa dibuka lagi di sini</small>
+            </button>
+            <button role="menuitem" class="sep" onclick={() => ((exportOpen = false), (metaOpen = true))}>
+              <strong>Properti dokumen…</strong><small>Judul, penulis, subjek, dan kata kunci berkas</small>
+            </button>
+          </div>
+        {/if}
+      </div>
     </nav>
   </header>
 

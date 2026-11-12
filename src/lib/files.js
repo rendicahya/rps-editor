@@ -3,7 +3,14 @@
 
 const SAVE_TYPES = [{ description: 'Dokumen RPS', accept: { 'application/json': ['.rps'] } }];
 const OPEN_TYPES = [
-  { description: 'Dokumen RPS', accept: { 'application/json': ['.rps', '.json'], 'application/pdf': ['.pdf'] } }
+  {
+    description: 'Dokumen RPS',
+    accept: {
+      'application/json': ['.rps', '.json'],
+      'application/pdf': ['.pdf'],
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx']
+    }
+  }
 ];
 
 /** Nama berkas dengan ekstensi .rps (mengganti .json). */
@@ -67,7 +74,7 @@ export async function openJsonFile() {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.rps,.json,.pdf,application/json,application/pdf';
+    input.accept = '.rps,.json,.pdf,.docx,application/json,application/pdf';
     input.onchange = () => {
       const file = input.files?.[0];
       resolve(file ? { file, handle: null } : null);
