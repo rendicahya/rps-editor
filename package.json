@@ -2,6 +2,8 @@
   "name": "rps-editor",
   "private": true,
   "version": "0.1.0",
+  "author": "Randy Cahya Wihandika",
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "dev": "vite",
