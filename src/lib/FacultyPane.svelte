@@ -13,6 +13,7 @@
   import { librarySort, sorted } from './librarySort.svelte.js';
   import SortSelect from './SortSelect.svelte';
   import VersionDiffDialog from './VersionDiffDialog.svelte';
+  import ProdiRekapDialog from './ProdiRekapDialog.svelte';
   import { review, setReviewYears, REVIEW_CHOICES, reviewSince, isReviewDue } from './review.svelte.js';
   import { formatTanggal } from './model.js';
 
@@ -947,6 +948,15 @@
     onbook(sops, title);
   }
 
+  // ---- Rekap CPL: matriks mata kuliah × CPL untuk RPS pilihan atau isi folder ----
+  let rekap = $state(null);
+  function makeRekap(list) {
+    const sops = sopsOf(list);
+    if (!sops.length) return ui.alert('Tidak ada RPS di pilihan ini.');
+    const folder = list.length === 1 && list[0].isFolder ? list[0].item.name : '';
+    rekap = { title: folder || `${sops.length} RPS dipilih`, items: sops };
+  }
+
   // ---- Hak akses ----
   function openAccess(kind, item) {
     const up = kind === 'folders' ? parents.get(item.id) : folderOf(item);
@@ -992,6 +1002,7 @@
     return [
       { head: `${list.length} item dipilih` },
       { label: 'Gabung jadi satu PDF…', icon: 'book', run: () => makeBook(list) },
+      { label: 'Rekap CPL…', icon: 'grid', run: () => makeRekap(list) },
       { sep: true },
       { label: `Pindahkan ${n} item…`, icon: 'move', run: () => startMove(own), disabled: !n },
       { label: 'Potong', icon: 'cut', hint: 'Ctrl+X', run: () => cut(own), disabled: !n },
@@ -1027,6 +1038,7 @@
       ...hereItems(f.id),
       { sep: true },
       { label: 'Gabung isinya jadi satu PDF…', icon: 'book', run: () => makeBook([entryOf(f, true)]), disabled: !sopsOf([entryOf(f, true)]).length },
+      { label: 'Rekap CPL isinya…', icon: 'grid', run: () => makeRekap([entryOf(f, true)]), disabled: !sopsOf([entryOf(f, true)]).length },
       { label: accessTip(f), icon: 'users', run: () => openAccess('folders', f) },
       ...(canEdit(f) ? [{ label: 'Ubah nama', icon: 'pencil', hint: 'F2', run: () => renameFolder(f) }] : []),
       ...(manage
@@ -1194,6 +1206,7 @@
         <button type="button" class="btn danger" onclick={() => purgeMany(selRows.map((d) => d.item))}><Icon name="trash" size={14} /> Hapus permanen</button>
       {:else}
         <button type="button" class="btn" onclick={() => makeBook(selRows)} title="Gabungkan RPS yang dipilih (termasuk isi folder) menjadi satu PDF berdaftar isi"><Icon name="book" size={14} /> Gabung PDF</button>
+        <button type="button" class="btn" onclick={() => makeRekap(selRows)} title="Matriks mata kuliah × CPL dari RPS yang dipilih (termasuk isi folder)"><Icon name="grid" size={14} /> Rekap CPL</button>
         <button type="button" class="btn" disabled={!own.length} onclick={() => startMove(own)}><Icon name="move" size={14} /> Pindahkan</button>
         <button type="button" class="btn danger" disabled={!own.length} onclick={() => deleteMany(own)}><Icon name="trash" size={14} /> Hapus</button>
       {/if}
@@ -1598,6 +1611,19 @@
     bind:left={compare.left}
     bind:right={compare.right}
     onclose={() => (compare = null)}
+  />
+{/if}
+
+{#if rekap}
+  <ProdiRekapDialog
+    open={true}
+    title={rekap.title}
+    items={rekap.items}
+    onopen={(s) => {
+      rekap = null;
+      openSop(s);
+    }}
+    onclose={() => (rekap = null)}
   />
 {/if}
 

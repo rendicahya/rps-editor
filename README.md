@@ -78,6 +78,13 @@ Sudah ada:
     komentar baru dari orang lain langsung muncul. Teks komentar hanya bisa diubah penulisnya; komentar bisa dihapus
     penulisnya, pemilik RPS, dan admin (balasannya ikut terhapus). Komentar terpisah dari isi RPS: tidak masuk riwayat,
     berkas `.rps`, maupun hasil ekspor, dan ekspor mengingatkan bila masih ada komentar yang belum selesai.
+  - **Rekap CPL** (pilih RPS atau folder › **Rekap CPL**, atau klik kanan folder › **Rekap CPL isinya…**): matriks
+    mata kuliah × CPL. Sel berisi persentase nilai akhir mata kuliah yang mengukur CPL itu (seperti tab Rekap nilai di
+    Periksa), atau sumbangannya dalam SKS, atau sekadar ✓/○. Baris bawah: jumlah mata kuliah yang menilai tiap CPL dan
+    SKS-setara (Σ SKS × persen). CPL dicocokkan lewat kodenya; bila dipilih katalog kurikulum (otomatis menurut prodi
+    RPS-nya), semua CPL katalog tampil sehingga CPL yang belum dinilai mata kuliah mana pun terlihat, dan kode di luar
+    katalog ditandai. Juga diingatkan: CPL yang hanya dinilai satu mata kuliah dan RPS yang bobot asesmennya bukan
+    100%. Bisa diunduh sebagai CSV (Excel); klik nama mata kuliah untuk membukanya.
   - **Unggah banyak sekaligus**: seret berkas `.rps` atau ZIP berisi `.rps` ke daftar atau ke
     folder di pohon (atau tombol unggah berkas / menu klik kanan), maksimal 500 berkas. Subfolder di dalam ZIP dibuat
     ulang; folder bernama sama yang milik Anda dipakai. PDF dan DOCX hasil ekspor RPS Editor juga diterima. Berkas yang tidak
