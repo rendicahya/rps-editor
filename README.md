@@ -1,10 +1,9 @@
 # RPS Editor
 
 Aplikasi web (front-end saja, PWA) untuk menyusun Rencana Pembelajaran Semester (RPS) berformat baku FILKOM UB,
-menyimpannya sebagai berkas `.rps` (isinya JSON), dan mengekspornya ke PDF A4. Saudara dari
-[SOP Editor](https://github.com/rendicahya/sop-editor): arsitektur, akun, dan pustakanya sama.
+menyimpannya sebagai berkas `.rps` (isinya JSON), dan mengekspornya ke PDF A4.
 
-Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase (proyek yang sama dengan SOP Editor).
+Dibangun dengan Svelte 5 + Vite, jsPDF, vite-plugin-pwa, serta Firebase.
 
 ## Status
 
@@ -41,9 +40,8 @@ Sudah ada:
   - waktu pertemuan dibanding SKS (kuliah n×50 menit, praktikum n×170 menit; "2x50 menit" dan "100 menit" terbaca);
   - Lembar Kerja tanpa judul, asesmen, Sub-CPMK, atau deskripsi.
 
-- **Pustaka Daring** seperti SOP Editor (folder, hak akses per anggota/grup, riwayat, recycle bin, "sedang diedit"),
-  dengan koleksi RPS sendiri; anggota dan grup sama dengan SOP Editor.
-  - **Unggah banyak sekaligus** (seperti SOP Editor): seret berkas `.rps` atau ZIP berisi `.rps` ke daftar atau ke
+- **Pustaka Daring**: folder, hak akses per anggota/grup, riwayat, recycle bin, dan keterangan "sedang diedit".
+  - **Unggah banyak sekaligus**: seret berkas `.rps` atau ZIP berisi `.rps` ke daftar atau ke
     folder di pohon (atau tombol unggah berkas / menu klik kanan), maksimal 500 berkas. Subfolder di dalam ZIP dibuat
     ulang; folder bernama sama yang milik Anda dipakai. PDF hasil ekspor RPS Editor juga diterima. Berkas yang tidak
     terbaca dilewati dan disebutkan alasannya; unggahan berhenti bila penyimpanan penuh.
@@ -66,9 +64,9 @@ Rencana berikutnya:
 
 ## Firebase
 
-Proyek Firebase sama dengan SOP Editor sehingga anggota (`members`) dan grup (`groups`) dipakai bersama.
-**Aturan Firestore hanya ada satu per proyek** dan dikelola di repositori SOP Editor (`firebase/firestore.rules`).
-Jangan men-deploy aturan dari repositori ini: deploy terakhir menimpa seluruh aturan, termasuk milik SOP Editor.
+Anggota (`members`) dan grup (`groups`) disimpan di proyek Firebase bersama dan dipakai juga oleh aplikasi lain.
+**Aturan Firestore hanya ada satu per proyek** dan tidak dikelola di repositori ini. Jangan men-deploy aturan dari
+sini: deploy terakhir menimpa seluruh aturan proyek.
 
 Rancangan koleksi RPS:
 
@@ -79,8 +77,8 @@ Rancangan koleksi RPS:
 | `rpsEditing/{key}` | keterangan "sedang diedit" |
 | `curricula/{prodiId}` | `{ nama, departemen, managers: [email], cpl, cpmk }`; diedit pengelola prodi dan admin |
 
-Aplikasi ini satu origin dengan SOP Editor di GitHub Pages, jadi semua kunci `localStorage`/IndexedDB berawalan
-`rps-editor`. Pengecualian: font Calibri disimpan bersama (`sop-editor-fonts`) agar cukup dipilih sekali.
+Aplikasi ini berbagi origin dengan aplikasi lain di GitHub Pages, jadi semua kunci `localStorage`/IndexedDB berawalan
+`rps-editor`. Pengecualian: font Calibri disimpan di basis data font bersama agar cukup dipilih sekali.
 
 ## Format berkas (.rps, berisi JSON)
 
