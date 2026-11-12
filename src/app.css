@@ -315,6 +315,7 @@ textarea {
 }
 
 .workspace {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: grid;
@@ -336,6 +337,12 @@ textarea {
 .preview-scroll {
   flex: 1;
   overflow: auto;
+}
+/* Panel komentar dipakai sambil mengklik isian: halaman digeser agar tidak tertutup panel. */
+@media (min-width: 900px) {
+  .workspace.with-notes .preview {
+    margin-right: calc(min(380px, 100vw - 2rem) + 1.5rem);
+  }
 }
 .preview-scroll .pages {
   align-items: safe center;
@@ -434,17 +441,20 @@ textarea:focus {
   font-size: 0.82rem;
 }
 
-/* Tombol Periksa dengan jumlah temuan */
-.check-btn {
+/* Tombol Periksa dan Komentar dengan jumlah temuan */
+.check-btn,
+.notes-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
 }
-.check-btn.on {
+.check-btn.on,
+.notes-btn.on {
   background: var(--accent-soft);
   color: var(--accent);
 }
-.check-btn .badge {
+.check-btn .badge,
+.notes-btn .badge {
   min-width: 1.15rem;
   height: 1.15rem;
   padding: 0 0.3rem;

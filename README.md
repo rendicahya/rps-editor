@@ -60,6 +60,13 @@ Sudah ada:
   - **Kembalikan versi saat RPS terbuka di tab**: isi versi lama dimuat ke tab itu sebagai perubahan biasa (bisa
     di-Undo) dan baru menjadi isi terkini setelah disimpan. Bila RPS tidak terbuka, versi lama langsung menjadi isi
     terkini.
+  - **Komentar peninjauan** (tombol **Komentar** di toolbar): siapa pun yang bisa melihat RPS, termasuk pemegang hak
+    Lihat, bisa berkomentar, membalas, menandai **Selesai**, dan membukanya lagi. Klik isian di halaman lalu tulis
+    komentar, atau klik kanan isian › **Komentari…**; komentar juga bisa untuk seluruh RPS. Isian yang punya komentar
+    terbuka diberi penanda kuning, komentar yang isiannya sudah berubah sejak dikomentari diberi tanda "diubah", dan
+    komentar baru dari orang lain langsung muncul. Teks komentar hanya bisa diubah penulisnya; komentar bisa dihapus
+    penulisnya, pemilik RPS, dan admin (balasannya ikut terhapus). Komentar terpisah dari isi RPS: tidak masuk riwayat,
+    berkas `.rps`, maupun hasil ekspor, dan ekspor mengingatkan bila masih ada komentar yang belum selesai.
   - **Unggah banyak sekaligus**: seret berkas `.rps` atau ZIP berisi `.rps` ke daftar atau ke
     folder di pohon (atau tombol unggah berkas / menu klik kanan), maksimal 500 berkas. Subfolder di dalam ZIP dibuat
     ulang; folder bernama sama yang milik Anda dipakai. PDF dan DOCX hasil ekspor RPS Editor juga diterima. Berkas yang tidak
@@ -111,6 +118,7 @@ Rancangan koleksi RPS:
 | Koleksi | Isi |
 | --- | --- |
 | `rps/{id}` + `versions` | dokumen RPS dan riwayatnya |
+| `rps/{id}/comments/{cid}` | komentar peninjauan dan balasannya (`parent` null = komentar utama) |
 | `rpsFolders/{id}` | folder Pustaka Daring RPS |
 | `rpsEditing/{key}` | keterangan "sedang diedit" |
 | `curricula/{prodiId}` | `{ nama, departemen, managers: [email], cpl, cpmk }`; diedit pengelola prodi dan admin |

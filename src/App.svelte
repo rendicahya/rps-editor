@@ -16,6 +16,9 @@
   import PdfPreviewDialog from './lib/PdfPreviewDialog.svelte';
   import FindPanel from './lib/FindPanel.svelte';
   import CheckPanel from './lib/CheckPanel.svelte';
+  import CommentPanel from './lib/CommentPanel.svelte';
+  import Icon from './lib/Icon.svelte';
+  import { notes, currentRef, noteRef } from './lib/comments.svelte.js';
   import ContextMenu from './lib/ContextMenu.svelte';
   import { checkDocument } from './lib/validate.js';
   import { review } from './lib/review.svelte.js';
@@ -105,12 +108,18 @@
 
   let findOpen = $state(false);
   let checkOpen = $state(false);
+  let notesOpen = $state(false);
+  // Cari, Periksa, dan Komentar memakai tempat yang sama: hanya satu yang terbuka.
   $effect(() => {
-    if (findOpen) checkOpen = false;
+    if (findOpen) untrack(() => (checkOpen = notesOpen = false));
   });
   $effect(() => {
-    if (checkOpen) findOpen = false;
+    if (checkOpen) untrack(() => (findOpen = notesOpen = false));
     if (empty) checkOpen = false;
+  });
+  $effect(() => {
+    if (notesOpen) untrack(() => (findOpen = checkOpen = false));
+    if (empty) notesOpen = false;
   });
   const issues = $derived(empty ? [] : checkDocument(app.doc, { reviewYears: review.years }));
   const issueErrors = $derived(issues.filter((i) => i.level === 'error').length);
@@ -119,7 +128,8 @@
   /** Tampilkan isian `ref` (data-field) di halaman; isian pilihan ('pk:') dibuka panelnya. */
   async function jumpTo(ref) {
     await tick();
-    const el = document.querySelector(`[data-field="${ref}"]`);
+    // Rujukan komentar tanpa awalan halaman (lihat noteRef) juga cocok dengan isian di sampul atau Lembar Kerja.
+    const el = document.querySelector(`[data-field="${ref}"]`) ?? document.querySelector(`[data-field$=":${ref}"]`);
     el?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     el?.focus({ preventScroll: true });
     if (ref.startsWith('pk:') && el?.getAttribute('aria-expanded') !== 'true') el?.click();
@@ -710,6 +720,23 @@
   let conflict = $state(null);
   let conflictChosen;
   const openRemoteIds = $derived(tabs.list.filter((t) => t.remote).map((t) => t.remote.id));
+  // Komentar RPS daring di tab aktif, diikuti langsung selama tabnya aktif.
+  const noteSop = $derived(faculty.status === 'in' && activeTab?.remote ? activeTab.remote.id : null);
+  $effect(() => {
+    const id = noteSop;
+    untrack(() => Object.assign(notes, { sopId: id, list: [], error: '', focus: null, status: id ? 'loading' : 'idle' }));
+    if (!id) return;
+    return Faculty.watchComments(
+      id,
+      (list) => Object.assign(notes, { list, status: 'ready', error: '' }),
+      (error) => Object.assign(notes, { status: 'error', error })
+    );
+  });
+  const openNotes = $derived(noteSop ? notes.list.filter((c) => !c.parent && !c.resolved).length : 0);
+  // Isian yang punya komentar terbuka diberi penanda di halaman.
+  $effect(() => {
+    notes.marked = new Set(notes.list.filter((c) => !c.parent && !c.resolved).map((c) => currentRef(app.doc, c)).filter(Boolean));
+  });
   const activeEditors = $derived(activeTab?.remote ? (faculty.editing[activeTab.remote.id] ?? []).map((m) => m.name).join(', ') : '');
 
   $effect(() => {
@@ -923,8 +950,21 @@
       if (run === pdfRun) pdfBusy = false;
     }
   }
-  function pdf() {
-    if (pdfBusy) return;
+  /** Sebelum ekspor: ingatkan bila RPS daring ini masih punya komentar terbuka. false = batal, panel komentar dibuka. */
+  async function reviewDone() {
+    const n = openNotes;
+    if (!n) return true;
+    const go = await ui.confirm(`Masih ada ${n} komentar yang belum ditandai selesai pada RPS ini. Komentar tidak ikut diekspor.`, {
+      title: 'Komentar belum selesai',
+      ok: 'Tetap ekspor',
+      cancel: 'Lihat komentar'
+    });
+    if (!go) notesOpen = true;
+    return go;
+  }
+
+  async function pdf() {
+    if (pdfBusy || !(await reviewDone())) return;
     pdfBook = null;
     pdfSaved = fileMark();
     buildPdf();
@@ -971,6 +1011,7 @@
   // Ekspor Word dimuat terpisah agar tidak memperbesar muatan awal.
   let exportBusy = $state('');
   async function exportDocxFile() {
+    if (!(await reviewDone())) return;
     exportBusy = 'DOCX';
     const saved = fileMark();
     try {
@@ -1195,6 +1236,17 @@
           <span class="badge ok">✓</span>
         {/if}
       </button>
+      <button
+        class="btn ghost notes-btn"
+        class:on={notesOpen}
+        disabled={empty}
+        onclick={() => (notesOpen = !notesOpen)}
+        title={activeTab?.remote ? (openNotes ? `${openNotes} komentar belum selesai` : 'Komentar dan balasan dari peninjau') : 'Komentar untuk RPS di Pustaka Daring'}
+      >
+        <Icon name="comment" size={15} />
+        Komentar
+        {#if openNotes}<span class="badge">{openNotes}</span>{/if}
+      </button>
       <div class="export">
         <button class="btn primary" onclick={() => ((saveOpen = false), (exportOpen = !exportOpen))} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy || empty}>
           {exportBusy ? `Membuat ${exportBusy}…` : 'Ekspor'}
@@ -1287,8 +1339,14 @@
     </div>
   </div>
 
-  <main class="workspace">
-    <section class="preview">
+  <main class="workspace" class:with-notes={notesOpen}>
+    <section
+      class="preview"
+      onfocusin={(e) => {
+        const f = noteRef(e.target.closest?.('[data-field]')?.dataset.field);
+        if (f) notes.focus = f;
+      }}
+    >
       {#if activeTab?.remote && !activeTab.remote.canEdit}
         <div class="waiting" role="status">
           <span><strong>Anda hanya punya hak lihat pada RPS ini.</strong> Perubahan hanya bisa disimpan sebagai salinan milik Anda.</span>
@@ -1342,6 +1400,15 @@
         </div>
       {/if}
     </section>
+    <CommentPanel
+      bind:open={notesOpen}
+      doc={app.doc}
+      remote={activeTab?.remote ?? null}
+      onjump={jumpTo}
+      onupload={async () => {
+        if (await saveToFaculty()) notesOpen = true;
+      }}
+    />
   </main>
 
   {#if $needRefresh}

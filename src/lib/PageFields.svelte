@@ -10,6 +10,7 @@
   import { app } from './store.svelte.js';
   import { PT } from './layout.js';
   import { newItem, removeItem, duplicateItem, formatAngka, LISTS, JENIS_PERTEMUAN, SEMESTER } from './model.js';
+  import { notes, commentOn, noteRef, describeAnchor } from './comments.svelte.js';
   import { plainText, sliceRich, getSelection, setSelection } from './richtext.js';
   import RichField from './RichField.svelte';
   import ContextMenu from './ContextMenu.svelte';
@@ -316,6 +317,9 @@
     return out;
   }
 
+  /** Penanda isian yang punya komentar terbuka (tidak tampil di pratinjau PDF). */
+  const noted = (id) => (editable && notes.marked.has(noteRef(id)) ? '' : undefined);
+
   function ctxItems(f, e) {
     const out = [];
     const el = e.target.closest?.('textarea, .f-rich');
@@ -327,6 +331,8 @@
       const r = rowOf(f.hot);
       if (r) out.push(...rowItems(r));
     }
+    const ref = (f.kind === 'text' || f.kind === 'pick') && noteRef(f.id);
+    if (ref && notes.sopId && describeAnchor(app.doc, ref)) out.push(SEP, { label: 'Komentari…', icon: 'comment', run: () => commentOn(ref) });
     return out.filter((it, i, a) => !it.sep || (i > 0 && i < a.length - 1 && !a[i - 1].sep));
   }
 
@@ -364,6 +370,7 @@
       class="f-text"
       style={inner(f)}
       data-field={f.id}
+      data-note={noted(f.id)}
       aria-label={f.label}
       placeholder={f.placeholder ?? ''}
       multiline={f.multiline}
@@ -377,6 +384,7 @@
       class="f-text"
       style={inner(f)}
       data-field={f.id}
+      data-note={noted(f.id)}
       aria-label={f.label}
       placeholder={f.placeholder ?? ''}
       spellcheck="false"
@@ -428,13 +436,13 @@
       </button>
     {:else if f.kind === 'pick' && f.type === 'date'}
       <!-- Input tanggal tak terlihat: hasilnya langsung tampil terformat di halaman. -->
-      <span class="f-date" style={box(f)} title="Pilih tanggal">
-        <input type="date" data-field={f.id} aria-label={f.label} value={get(f.path)} onchange={(e) => asStep(() => set(f.path, e.currentTarget.value))} onclick={(e) => e.currentTarget.showPicker?.()} />
+      <span class="f-date" style={box(f)} title="Pilih tanggal" data-fid={f.id}>
+        <input type="date" data-field={f.id} data-note={noted(f.id)} aria-label={f.label} value={get(f.path)} onchange={(e) => asStep(() => set(f.path, e.currentTarget.value))} onclick={(e) => e.currentTarget.showPicker?.()} />
       </span>
     {:else if f.kind === 'pick'}
       {@const open = openPick === f.id}
       <div class="f-pick" class:open style={box(f)} data-hot={f.hot} data-fid={f.id}>
-        <button class="f-pick-btn" data-field={f.id} title={f.label} aria-label={f.label} aria-expanded={open} onclick={() => (openPick = open ? null : f.id)}></button>
+        <button class="f-pick-btn" data-field={f.id} data-note={noted(f.id)} title={f.label} aria-label={f.label} aria-expanded={open} onclick={() => (openPick = open ? null : f.id)}></button>
         {#if open}
           <div class="pop" class:up={popUp(f)} role="dialog" aria-label={f.label}>
             <strong class="pop-title">{f.label}</strong>
@@ -620,6 +628,12 @@
   .f-date:focus-within {
     background: rgb(var(--edit) / 0.08);
     box-shadow: inset 0 0 0 1.5px rgb(var(--edit) / 0.6);
+  }
+  /* Isian yang punya komentar terbuka (hanya di layar, tidak ikut ekspor). */
+  .fields :global([data-note]),
+  .f-date:has([data-note]) {
+    background-color: rgb(250 204 21 / 0.2);
+    box-shadow: inset 0 -2px 0 rgb(217 142 4 / 0.85);
   }
 
   .f-hint {

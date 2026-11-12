@@ -27,6 +27,9 @@
     compare: ['M4 4h6v16H4z', 'M14 4h6v16h-6z', 'M6.5 9h1', 'M16.5 9h1', 'M6.5 13h1', 'M16 13h2'],
     book: ['M4 5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2z', 'M4 20a2 2 0 0 0 2 2h13v-4', 'M8 7h7'],
     alert: ['M12 3 2 20h20z', 'M12 10v4', 'M12 17v.5'],
+    comment: ['M4 5h16v11H10l-5 4v-4H4z', 'M8 9.5h8', 'M8 12.5h5'],
+    check: ['m5 12.5 4.5 4.5L19 7.5'],
+    reply: ['M10 8 5 12.5l5 4.5', 'M5 12.5h9a5 5 0 0 1 5 5V19'],
     // Untuk menu klik kanan.
     save: ['M5 4h11l3 3v13H5z', 'M8 4v5h7V4', 'M8 20v-6h8v6'],
     download: ['M12 4v11', 'm7 10 5 5 5-5', 'M5 20h14'],

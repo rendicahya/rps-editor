@@ -69,7 +69,7 @@ export const isShared = (item) => (item.readers ?? []).some((r) => r !== item.cr
 /** Bentuk `tab.remote` untuk SOP yang terbuka di tab. */
 export const remoteOf = (sop) => ({
   id: sop.id, rev: sop.rev, title: sop.title, folder: sop.folder ?? null,
-  shared: isShared(sop), canEdit: canEdit(sop), canRename: canEdit(sop)
+  shared: isShared(sop), canEdit: canEdit(sop), canRename: canEdit(sop), manage: canManage(sop)
 });
 
 /** code: conflict | gone | full | denied | too-big | blank */
@@ -553,16 +553,94 @@ export async function moveToBin(id) {
 }
 export const restoreFromBin = (id) => patch(id, { deletedAt: null, deletedBy: null });
 
-/** Hapus permanen, riwayatnya ikut. Tidak bisa dibatalkan. */
+/** Hapus permanen, riwayat dan komentarnya ikut. Tidak bisa dibatalkan. */
 export async function purgeSop(sop) {
   const { F, db } = await load();
   const ref = F.doc(db, C.sops, sop.id);
+  // Komentar dihapus lebih dulu, terpisah dari penghapusan RPS-nya agar batas penulisan per batch tidak terlampaui.
+  const notes = await F.getDocsFromServer(F.collection(ref, 'comments')).catch(() => null);
+  for (let i = 0; notes && i < notes.docs.length; i += 200) {
+    const b = F.writeBatch(db);
+    notes.docs.slice(i, i + 200).forEach((c) => b.delete(c.ref));
+    await b.commit().catch(() => {}); // komentar yang tersisa tidak menghalangi penghapusan RPS
+  }
   const versions = await F.getDocsFromServer(F.collection(ref, 'versions'));
   const b = F.writeBatch(db);
   versions.forEach((v) => b.delete(v.ref));
   b.delete(ref);
   b.update(F.doc(db, C.usage), { bytes: F.increment(-sop.totalBytes), lastSop: sop.id });
   await b.commit().catch(failed);
+}
+
+// ---- Komentar: catatan peninjauan per RPS, terpisah dari isinya (lihat bagian Komentar di aturan) ----
+
+export const COMMENT_MAX = 4000; // sama dengan validCommentText di firestore.rules
+
+function commentFailed(e) {
+  if (e?.code === 'permission-denied') throw new Error('Server menolak komentar ini. Mungkin RPS-nya sudah dihapus atau hak akses Anda berubah.');
+  throw new Error(readable(e));
+}
+const commentsOf = (F, db, sopId) => F.collection(db, C.sops, sopId, 'comments');
+
+/** Mengikuti komentar RPS `sopId`; onChange(daftar) setiap ada perubahan. Panggil fungsi hasilnya untuk berhenti. */
+export function watchComments(sopId, onChange, onError) {
+  let stop = null;
+  let dead = false;
+  load()
+    .then(({ F, db }) => {
+      if (dead) return;
+      stop = F.onSnapshot(
+        commentsOf(F, db, sopId),
+        (snap) =>
+          onChange(
+            snap.docs.map((d) => {
+              const c = d.data({ serverTimestamps: 'estimate' });
+              return { ...c, id: d.id, at: ms(c.at), editedAt: ms(c.editedAt), resolvedAt: ms(c.resolvedAt), pending: d.metadata.hasPendingWrites };
+            })
+          ),
+        (e) => onError?.(readable(e))
+      );
+    })
+    .catch((e) => onError?.(readable(e)));
+  return () => {
+    dead = true;
+    stop?.();
+  };
+}
+
+/** Komentar utama (`parent` null; `anchor` = data-field isian yang dikomentari, atau null) atau balasan. */
+export async function addComment(sopId, { parent = null, anchor = null, label = '', quote = '', text }) {
+  const { F, db } = await load();
+  const { uid, email, name } = faculty.user;
+  await F.addDoc(commentsOf(F, db, sopId), {
+    parent, anchor: parent ? null : anchor, label: parent ? '' : label.slice(0, 200), quote: parent ? '' : quote.slice(0, 300),
+    text: text.slice(0, COMMENT_MAX), by: uid, byName: name, byEmail: email, at: F.serverTimestamp(), editedAt: null,
+    resolved: false, resolvedBy: null, resolvedByName: null, resolvedAt: null
+  }).catch(commentFailed);
+}
+
+export async function editComment(sopId, id, text) {
+  const { F, db } = await load();
+  await F.updateDoc(F.doc(commentsOf(F, db, sopId), id), { text: text.slice(0, COMMENT_MAX), editedAt: F.serverTimestamp() }).catch(commentFailed);
+}
+
+export async function resolveComment(sopId, id, done) {
+  const { F, db } = await load();
+  const { uid, name } = faculty.user;
+  const data = done
+    ? { resolved: true, resolvedBy: uid, resolvedByName: name, resolvedAt: F.serverTimestamp() }
+    : { resolved: false, resolvedBy: null, resolvedByName: null, resolvedAt: null };
+  await F.updateDoc(F.doc(commentsOf(F, db, sopId), id), data).catch(commentFailed);
+}
+
+/** Menghapus komentar `id` beserta balasannya (`replies`: id balasan). */
+export async function deleteComment(sopId, id, replies = []) {
+  const { F, db } = await load();
+  const col = commentsOf(F, db, sopId);
+  const b = F.writeBatch(db);
+  b.delete(F.doc(col, id));
+  replies.forEach((r) => b.delete(F.doc(col, r)));
+  await b.commit().catch(commentFailed);
 }
 
 // ---- "Sedang diedit": hanya pemberitahuan, tidak pernah menghalangi orang lain menyimpan ----
