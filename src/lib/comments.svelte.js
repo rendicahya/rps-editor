@@ -9,7 +9,13 @@ import { textFields } from './findReplace.js';
  * status: idle | loading | ready | error. marked: isian (lihat noteRef) yang punya komentar terbuka.
  * focus: isian halaman yang terakhir diklik. request: { ref } permintaan berkomentar dari menu klik kanan.
  */
-export const notes = $state({ sopId: null, list: [], status: 'idle', error: '', marked: new Set(), focus: null, request: null });
+export const notes = $state({
+  sopId: null, list: [], status: 'idle', error: '', marked: new Set(), focus: null, request: null,
+  highlight: null, // id komentar yang perlu ditampilkan (dari tautan atau daftar sebutan)
+  mine: [], // komentar dari RPS mana pun yang menyebut akun ini
+  seen: readSeen(), // waktu terakhir daftar sebutan dibuka
+  wantMentions: false // dialog Pustaka dibuka langsung di daftar sebutan
+});
 
 /** Dari menu klik kanan isian: buka panel komentar dengan komentar baru untuk isian `ref`. */
 export const commentOn = (ref) => (notes.request = { ref });
@@ -24,6 +30,65 @@ export const noteRef = (field) => (field ? field.replace(/^(cover|lk\d+):/, '').
 const SAMPUL = { universitas: 'Universitas', fakultas: 'Fakultas', tahun: 'Tahun' };
 /** "Pekan 3" atau "Pekan 3 praktikum": kuliah dan praktikum bisa berpekan sama. */
 const pekan = (p) => `Pekan ${p.pekan}${p.jenis === 'praktikum' ? ' praktikum' : ''}`;
+
+// ---- Tautan langsung ----
+
+/** Tautan yang membuka RPS daring `id` (dan menyorot komentar `cid`) di aplikasi ini. */
+export function sopLink(id, cid = null) {
+  const u = new URL(location.pathname, location.origin);
+  u.searchParams.set('rps', id);
+  if (cid) u.searchParams.set('komentar', cid);
+  return u.href;
+}
+
+/** Menyalin tautan ke clipboard; hasilnya pesan untuk ditampilkan. */
+export async function copyLink(id, cid = null) {
+  const link = sopLink(id, cid);
+  try {
+    await navigator.clipboard.writeText(link);
+    return cid ? 'Tautan komentar disalin.' : 'Tautan RPS disalin. Penerima perlu masuk dan punya hak lihat.';
+  } catch {
+    return 'Browser tidak mengizinkan menyalin. Tautan: ' + link;
+  }
+}
+
+// ---- Sebutan (@email) ----
+
+const SEEN_KEY = 'rps-editor.mentionsSeen';
+function readSeen() {
+  try {
+    return Number(localStorage.getItem(SEEN_KEY)) || 0;
+  } catch {
+    return 0;
+  }
+}
+/** Daftar sebutan sudah dilihat. */
+export function markMentionsSeen() {
+  notes.seen = Date.now();
+  try {
+    localStorage.setItem(SEEN_KEY, String(notes.seen));
+  } catch {}
+}
+/** Sebutan dari orang lain yang datang setelah daftar sebutan terakhir dibuka. */
+export const unseenMentions = (me) => notes.mine.filter((c) => c.by !== me && c.at > notes.seen).length;
+
+export const MENTION_RE = /@([a-z0-9._%+-]+@(?:ub\.ac\.id|gmail\.com))/gi;
+
+/** Email yang disebut di `text` (huruf kecil, tanpa duplikat). */
+export function findMentions(text) {
+  return [...new Set([...String(text).matchAll(MENTION_RE)].map((m) => m[1].toLowerCase()))];
+}
+
+/**
+ * Anggota yang bisa melihat RPS `sop` ({ readers, createdByEmail }); `members` dari listMembers. Admin selalu bisa.
+ */
+export function readersOf(sop, members) {
+  const list = sop?.readers ?? [];
+  const all = list.includes('*');
+  return members
+    .filter((m) => all || m.role === 'admin' || m.email === sop?.createdByEmail || list.includes(m.email) || m.groups.some((g) => list.includes(g)))
+    .map((m) => m.email);
+}
 
 const short = (t, n = 200) => {
   const s = plainText(String(t ?? '')).replace(/\s+/g, ' ').trim();

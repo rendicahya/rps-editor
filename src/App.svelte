@@ -18,7 +18,7 @@
   import CheckPanel from './lib/CheckPanel.svelte';
   import CommentPanel from './lib/CommentPanel.svelte';
   import Icon from './lib/Icon.svelte';
-  import { notes, currentRef, noteRef } from './lib/comments.svelte.js';
+  import { notes, currentRef, noteRef, copyLink, unseenMentions } from './lib/comments.svelte.js';
   import ContextMenu from './lib/ContextMenu.svelte';
   import { checkDocument } from './lib/validate.js';
   import { review } from './lib/review.svelte.js';
@@ -516,6 +516,7 @@
         { label: 'Simpan', icon: 'save', hint: 'Ctrl+S', run: inActive(quickSave) },
         { label: 'Simpan sebagai berkas…', icon: 'download', hint: 'Ctrl+Shift+S', run: inActive(() => save(true)) },
         { label: 'Duplikat tab', icon: 'copy', run: () => duplicateTab(t.id) },
+        ...(t.remote ? [{ label: 'Salin tautan RPS daring', icon: 'link', run: async () => notify(await copyLink(t.remote.id)) }] : []),
         { label: 'Tab baru', icon: 'filePlus', run: () => addTab(emptyDocument()) },
         { sep: true },
         { label: 'Tutup', icon: 'x', hint: 'Alt+W', run: () => closeTab(t.id) },
@@ -752,6 +753,11 @@
       (error) => Object.assign(notes, { status: 'error', error })
     );
   });
+  /** Isian yang dipilih pengguna (klik atau Tab) menjadi tujuan komentar baru; fokus otomatis tidak dihitung. */
+  function pickField(el) {
+    const f = el?.closest?.('[data-field]')?.dataset.field;
+    if (f) notes.focus = noteRef(f);
+  }
   const openNotes = $derived(noteSop ? notes.list.filter((c) => !c.parent && !c.resolved).length : 0);
   // Isian yang punya komentar terbuka diberi penanda di halaman.
   $effect(() => {
@@ -788,6 +794,52 @@
     }
     activeTab.remote = Faculty.remoteOf(sop);
   }
+
+  /** Membuka RPS daring `id` di tab (atau pindah ke tabnya). Hasilnya true bila berhasil. */
+  async function openRemoteRps(id) {
+    const opened = tabs.list.find((t) => t.remote?.id === id);
+    if (opened) {
+      switchTab(opened.id);
+      return true;
+    }
+    if (faculty.status !== 'in') return void ui.alert('Pustaka Daring tidak bisa dihubungi. Periksa koneksi internet, lalu coba lagi.'), false;
+    let sop;
+    try {
+      sop = await Faculty.getSop(id);
+    } catch (e) {
+      return void ui.alert(e.message), false;
+    }
+    if (!sop) return void ui.alert('RPS itu tidak ditemukan. Mungkin sudah dihapus, atau Anda tidak punya hak untuk melihatnya.'), false;
+    openFacultySop(sop);
+    notify(`Dibuka: ${sop.title || 'RPS tanpa judul'}`);
+    return true;
+  }
+
+  /** Membuka RPS daring `id`; bila `cid` diberikan, panel komentar dibuka dan komentar itu disorot. */
+  async function openComment(id, cid = null) {
+    if (!(await openRemoteRps(id)) || !cid) return;
+    notes.highlight = { sop: id, cid };
+    notesOpen = true;
+  }
+
+  // Tautan langsung: ?rps=ID (&komentar=ID) dibuka setelah akun dikenali, lalu dibersihkan dari alamat.
+  let pendingLink = (() => {
+    const q = new URLSearchParams(location.search);
+    return q.get('rps') ? { id: q.get('rps'), cid: q.get('komentar') } : null;
+  })();
+  $effect(() => {
+    if (faculty.status !== 'in' || !pendingLink) return;
+    const l = pendingLink;
+    pendingLink = null;
+    history.replaceState(history.state, '', location.pathname);
+    untrack(() => openComment(l.id, l.cid));
+  });
+
+  // Komentar dari RPS mana pun yang menyebut akun ini.
+  $effect(() => {
+    if (faculty.status !== 'in') return void (notes.mine = []);
+    return Faculty.watchMentions((list) => (notes.mine = list));
+  });
 
   /** Daftar pustaka baru dimuat: tab yang terbuka mengikuti hak akses terbaru. */
   function onFacultyLoaded(live) {
@@ -1176,7 +1228,18 @@
 />
 
 {#snippet libraryButton(cls)}
-  <button class={cls} onclick={() => openLibrary()} aria-haspopup="dialog" title="Buka RPS dari Pustaka Lokal atau Pustaka Daring">Pustaka</button>
+  {@const fresh = unseenMentions(faculty.user?.uid)}
+  <button
+    class="{cls} lib-btn"
+    onclick={() => {
+      if (fresh) notes.wantMentions = true; // langsung ke daftar "Menyebut saya"
+      openLibrary(fresh ? 'faculty' : undefined);
+    }}
+    aria-haspopup="dialog"
+    title={fresh ? `${fresh} komentar baru menyebut Anda` : 'Buka RPS dari Pustaka Lokal atau Pustaka Daring'}
+  >
+    Pustaka{#if fresh}<span class="mention-dot" aria-label="{fresh} sebutan baru">{fresh}</span>{/if}
+  </button>
 {/snippet}
 
 <div
@@ -1371,10 +1434,8 @@
   <main class="workspace" class:with-notes={notesOpen}>
     <section
       class="preview"
-      onfocusin={(e) => {
-        const f = noteRef(e.target.closest?.('[data-field]')?.dataset.field);
-        if (f) notes.focus = f;
-      }}
+      onpointerdown={(e) => pickField(e.target)}
+      onkeyup={(e) => e.key === 'Tab' && pickField(document.activeElement)}
     >
       {#if activeTab?.remote && !activeTab.remote.canEdit}
         <div class="waiting" role="status">
@@ -1434,6 +1495,7 @@
       doc={app.doc}
       remote={activeTab?.remote ?? null}
       onjump={jumpTo}
+      onnotify={notify}
       onupload={async () => {
         if (await saveToFaculty()) notesOpen = true;
       }}
@@ -1505,7 +1567,11 @@
       onnotify: notify,
       tabjson: facultyTabJson,
       onrestoretab: restoreIntoTab,
-      onbook: (sops, title) => makeBook(sops.map((s) => ({ json: s.json, title: s.title })), title)
+      onbook: (sops, title) => makeBook(sops.map((s) => ({ json: s.json, title: s.title })), title),
+      onopencomment: (sopId, cid) => {
+        libraryOpen = false;
+        openComment(sopId, cid);
+      }
     }}
   />
   <AiDialog bind:open={aiOpen} docKey={tabs.active} onpaste={loadPasted} />

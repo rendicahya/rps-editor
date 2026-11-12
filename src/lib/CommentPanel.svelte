@@ -1,16 +1,17 @@
 <script>
   import { tick, untrack } from 'svelte';
-  import { notes, describeAnchor, currentRef } from './comments.svelte.js';
+  import { notes, describeAnchor, currentRef, copyLink, findMentions, readersOf, MENTION_RE } from './comments.svelte.js';
   import * as Faculty from './faculty.svelte.js';
   import { faculty, COMMENT_MAX } from './faculty.svelte.js';
   import * as ui from './ask.svelte.js';
   import Icon from './Icon.svelte';
+  import MentionInput from './MentionInput.svelte';
 
   /**
    * Komentar peninjauan RPS daring di tab aktif. doc: isi tab aktif; remote: tab.remote (null: bukan RPS daring).
-   * onjump(ref) menuju isian di halaman; onupload() menyimpan RPS ini ke Pustaka Daring.
+   * onjump(ref) menuju isian di halaman; onupload() menyimpan RPS ini ke Pustaka Daring; onnotify(pesan).
    */
-  let { open = $bindable(false), doc, remote, onjump, onupload } = $props();
+  let { open = $bindable(false), doc, remote, onjump, onupload, onnotify } = $props();
 
   let tab = $state('open');
   let draft = $state('');
@@ -95,6 +96,71 @@
 
   const canDelete = (c) => c.by === me || !!remote?.manage || Faculty.isAdmin();
 
+  // ---- Sebutan: anggota yang bisa melihat RPS ini (dimuat sekali tiap RPS dibuka di panel) ----
+  let people = $state([]);
+  let peopleOf = null;
+  let membersCache = null;
+  $effect(() => {
+    const id = open && faculty.status === 'in' ? remote?.id : null;
+    if (!id || id === peopleOf) return;
+    peopleOf = id;
+    (async () => {
+      try {
+        membersCache ??= await Faculty.listMembers();
+        const sop = await Faculty.getSop(id);
+        if (peopleOf === id) people = readersOf(sop, membersCache).filter((e) => e !== faculty.user.email);
+      } catch {
+        peopleOf = null;
+      }
+    })();
+  });
+
+  /** Email yang disebut di `text` dan bisa melihat RPS ini; null bila pengguna membatalkan. */
+  async function mentionsIn(text) {
+    const all = findMentions(text).filter((e) => e !== faculty.user.email);
+    const out = all.filter((e) => people.includes(e));
+    const left = all.filter((e) => !people.includes(e));
+    if (left.length && !(await ui.confirm(
+      `${left.join(', ')} tidak punya hak lihat pada RPS ini (atau bukan anggota), jadi tidak akan menemukan komentar ini. Beri hak akses dulu bila perlu.\n\nTetap kirim?`,
+      { title: 'Sebutan', ok: 'Tetap kirim' }
+    ))) return null;
+    return out;
+  }
+
+  /** Teks komentar dipecah agar email yang disebut bisa disorot. */
+  function parts(c) {
+    const out = [];
+    let at = 0;
+    for (const m of c.text.matchAll(MENTION_RE)) {
+      if (!c.mentions?.includes(m[1].toLowerCase())) continue;
+      if (m.index > at) out.push({ t: c.text.slice(at, m.index) });
+      out.push({ m: m[1].toLowerCase() });
+      at = m.index + m[0].length;
+    }
+    if (at < c.text.length) out.push({ t: c.text.slice(at) });
+    return out;
+  }
+
+  // ---- Komentar yang diminta lewat tautan atau daftar sebutan ----
+  let flash = $state(null);
+  $effect(() => {
+    const h = notes.highlight; // { sop, cid }
+    if (!h || !open || notes.status !== 'ready' || notes.sopId !== h.sop) return;
+    const id = h.cid;
+    untrack(() => {
+      notes.highlight = null;
+      const c = notes.list.find((x) => x.id === id);
+      const root = c && (c.parent ? notes.list.find((x) => x.id === c.parent) : c);
+      if (!root) return onnotify?.('Komentar itu tidak ditemukan. Mungkin sudah dihapus.');
+      tab = root.resolved ? 'done' : 'open';
+      flash = root.id;
+      tick().then(() => list?.querySelector(`[data-id="${CSS.escape(root.id)}"]`)?.scrollIntoView({ block: 'center', behavior: 'smooth' }));
+      setTimeout(() => flash === root.id && (flash = null), 4000);
+    });
+  });
+
+  const copy = async (c) => onnotify?.(await copyLink(remote.id, c.id));
+
   async function run(fn) {
     if (busy) return false;
     busy = true;
@@ -113,8 +179,10 @@
     const text = draft.trim();
     if (!text) return;
     const info = anchor && describeAnchor(doc, anchor);
+    const mentions = await mentionsIn(text);
+    if (!mentions) return;
     const ok = await run(() =>
-      Faculty.addComment(remote.id, { anchor: info ? anchor : null, label: info?.label ?? '', quote: info?.quote ?? '', text })
+      Faculty.addComment(remote.id, { anchor: info ? anchor : null, label: info?.label ?? '', quote: info?.quote ?? '', text, mentions })
     );
     if (ok) {
       draft = '';
@@ -132,7 +200,9 @@
   async function sendReply(c) {
     const text = replyText.trim();
     if (!text) return;
-    if (await run(() => Faculty.addComment(remote.id, { parent: c.id, text }))) replyTo = null;
+    const mentions = await mentionsIn(text);
+    if (!mentions) return;
+    if (await run(() => Faculty.addComment(remote.id, { parent: c.id, text, mentions }))) replyTo = null;
   }
 
   function startEdit(c) {
@@ -144,7 +214,9 @@
   async function saveEdit(c) {
     const text = editText.trim();
     if (!text || text === c.text) return void (editing = null);
-    if (await run(() => Faculty.editComment(remote.id, c.id, text))) editing = null;
+    const mentions = await mentionsIn(text);
+    if (!mentions) return;
+    if (await run(() => Faculty.editComment(remote.id, c.id, text, mentions))) editing = null;
   }
 
   async function remove(c) {
@@ -180,14 +252,14 @@
 {#snippet body(c)}
   {#if editing === c.id}
     <div class="edit-box">
-      <textarea bind:value={editText} rows="3" maxlength={COMMENT_MAX} onkeydown={(e) => keys(e, () => saveEdit(c), () => (editing = null))}></textarea>
+      <MentionInput bind:value={editText} {people} rows="3" maxlength={COMMENT_MAX} onkeydown={(e) => keys(e, () => saveEdit(c), () => (editing = null))} />
       <span class="row end">
         <button class="btn small ghost" onclick={() => (editing = null)}>Batal</button>
         <button class="btn small primary" disabled={busy || !editText.trim()} onclick={() => saveEdit(c)}>Simpan</button>
       </span>
     </div>
   {:else}
-    <p class="text">{c.text}</p>
+    <p class="text">{#each parts(c) as p, i (i)}{#if p.m}<span class="mention" class:me={p.m === faculty.user?.email}>@{p.m}</span>{:else}{p.t}{/if}{/each}</p>
   {/if}
 {/snippet}
 
@@ -232,14 +304,15 @@
             <span class="chip plain">Seluruh RPS</span>
           {/if}
         </div>
-        <textarea
+        <MentionInput
           bind:this={input}
           bind:value={draft}
+          {people}
           rows="3"
           maxlength={COMMENT_MAX}
-          placeholder="Tulis komentar…"
+          placeholder="Tulis komentar… ketik @ untuk menyebut orang"
           onkeydown={(e) => keys(e, send, draft ? null : () => (open = false))}
-        ></textarea>
+        />
         <div class="row">
           <small class="hint">Klik isian di halaman untuk mengomentarinya · Ctrl+Enter mengirim</small>
           <button class="btn small primary" disabled={busy || !draft.trim()} onclick={send}>Kirim</button>
@@ -262,7 +335,7 @@
         {#each shown as c (c.id)}
           {@const w = where(c)}
           {@const kids = replies.get(c.id) ?? []}
-          <article class="thread" class:done={c.resolved} class:hit={hit(c)} data-ref={w.ref ?? ''}>
+          <article class="thread" class:done={c.resolved} class:hit={hit(c)} class:flash={flash === c.id} data-ref={w.ref ?? ''} data-id={c.id}>
             <div class="where">
               {#if w.ref}
                 <button class="chip" onclick={() => onjump(w.ref)} title="Tampilkan di halaman">{w.label}</button>
@@ -290,14 +363,17 @@
             {/if}
             {#if replyTo === c.id}
               <div class="reply-box">
-                <textarea bind:value={replyText} rows="2" maxlength={COMMENT_MAX} placeholder="Tulis balasan…" onkeydown={(e) => keys(e, () => sendReply(c), () => (replyTo = null))}></textarea>
+                <MentionInput bind:value={replyText} {people} rows="2" maxlength={COMMENT_MAX} placeholder="Tulis balasan…" onkeydown={(e) => keys(e, () => sendReply(c), () => (replyTo = null))} />
                 <span class="row end">
                   <button class="btn small ghost" onclick={() => (replyTo = null)}>Batal</button>
                   <button class="btn small primary" disabled={busy || !replyText.trim()} onclick={() => sendReply(c)}>Balas</button>
                 </span>
               </div>
             {:else if !c.pending}
-              <button class="link reply-btn" onclick={() => startReply(c)}><Icon name="reply" size={13} /> Balas</button>
+              <span class="foot">
+                <button class="link reply-btn" onclick={() => startReply(c)}><Icon name="reply" size={13} /> Balas</button>
+                <button class="link muted-link" onclick={() => copy(c)} title="Salin tautan yang langsung membuka komentar ini"><Icon name="link" size={12} /> Salin tautan</button>
+              </span>
             {/if}
           </article>
         {/each}
@@ -356,13 +432,6 @@
     font-size: 0.78rem;
     color: var(--muted);
     min-width: 0;
-  }
-  textarea {
-    width: 100%;
-    resize: vertical;
-    font: inherit;
-    font-size: 0.85rem;
-    box-sizing: border-box;
   }
   .row {
     display: flex;
@@ -546,10 +615,41 @@
   .link.danger {
     color: var(--danger, #b42318);
   }
-  .reply-btn {
-    justify-self: start;
+  .foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .reply-btn,
+  .muted-link {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
+  }
+  .muted-link {
+    color: var(--muted);
+  }
+  .mention {
+    font-weight: 600;
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-radius: 4px;
+    padding: 0 0.15rem;
+  }
+  .mention.me {
+    color: #a16207;
+    background: rgb(250 204 21 / 0.25);
+  }
+  .thread.flash {
+    animation: flash 3.9s ease-out;
+  }
+  @keyframes flash {
+    0%,
+    30% {
+      box-shadow: 0 0 0 3px rgb(250 204 21 / 0.9);
+    }
+    100% {
+      box-shadow: 0 0 0 0 rgb(250 204 21 / 0);
+    }
   }
 </style>

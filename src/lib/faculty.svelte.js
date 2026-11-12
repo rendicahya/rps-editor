@@ -252,6 +252,20 @@ export async function listSops() {
   return { live: sorted.filter((s) => !s.deletedBy), bin: sorted.filter((s) => s.deletedBy) };
 }
 
+/** RPS id (null bila tidak ada, sudah di recycle bin, atau tidak boleh dilihat akun ini). */
+export async function getSop(id) {
+  const { F, db } = await load();
+  try {
+    const snap = await F.getDocFromServer(F.doc(db, C.sops, id));
+    if (!snap.exists()) return null;
+    const s = row(snap);
+    return s.deletedBy ? null : s;
+  } catch (e) {
+    if (e?.code === 'permission-denied') return null;
+    throw new Error(readable(e));
+  }
+}
+
 export async function listVersions(id) {
   const { F, db } = await load();
   const snap = await F.getDocsFromServer(F.collection(db, C.sops, id, 'versions'));
@@ -623,20 +637,78 @@ export function watchComments(sopId, onChange, onError) {
   };
 }
 
-/** Komentar utama (`parent` null; `anchor` = data-field isian yang dikomentari, atau null) atau balasan. */
-export async function addComment(sopId, { parent = null, anchor = null, label = '', quote = '', text }) {
+export const MENTION_MAX = 20; // sama dengan validMentions di firestore.rules
+
+/**
+ * Komentar utama (`parent` null; `anchor` = data-field isian yang dikomentari, atau null) atau balasan.
+ * `mentions`: email anggota yang disebut. Hasilnya id komentar baru.
+ */
+export async function addComment(sopId, { parent = null, anchor = null, label = '', quote = '', text, mentions = [] }) {
   const { F, db } = await load();
   const { uid, email, name } = faculty.user;
-  await F.addDoc(commentsOf(F, db, sopId), {
+  const ref = F.doc(commentsOf(F, db, sopId));
+  await F.setDoc(ref, {
     parent, anchor: parent ? null : anchor, label: parent ? '' : label.slice(0, 200), quote: parent ? '' : quote.slice(0, 300),
-    text: text.slice(0, COMMENT_MAX), by: uid, byName: name, byEmail: email, at: F.serverTimestamp(), editedAt: null,
-    resolved: false, resolvedBy: null, resolvedByName: null, resolvedAt: null
+    text: text.slice(0, COMMENT_MAX), mentions: mentions.slice(0, MENTION_MAX), by: uid, byName: name, byEmail: email,
+    at: F.serverTimestamp(), editedAt: null, resolved: false, resolvedBy: null, resolvedByName: null, resolvedAt: null
+  }).catch(commentFailed);
+  return ref.id;
+}
+
+export async function editComment(sopId, id, text, mentions = []) {
+  const { F, db } = await load();
+  await F.updateDoc(F.doc(commentsOf(F, db, sopId), id), {
+    text: text.slice(0, COMMENT_MAX), mentions: mentions.slice(0, MENTION_MAX), editedAt: F.serverTimestamp()
   }).catch(commentFailed);
 }
 
-export async function editComment(sopId, id, text) {
+/**
+ * Jumlah komentar terbuka per RPS (Map id → jumlah). Satu kueri hitung per RPS (1 baca per RPS), paling banyak
+ * 12 sekaligus; RPS yang gagal dihitung dilewati.
+ */
+export async function countOpenComments(ids) {
   const { F, db } = await load();
-  await F.updateDoc(F.doc(commentsOf(F, db, sopId), id), { text: text.slice(0, COMMENT_MAX), editedAt: F.serverTimestamp() }).catch(commentFailed);
+  const out = new Map();
+  const queue = [...ids];
+  const worker = async () => {
+    for (let id; (id = queue.shift()); ) {
+      try {
+        const q = F.query(commentsOf(F, db, id), F.where('parent', '==', null), F.where('resolved', '==', false));
+        out.set(id, (await F.getCountFromServer(q)).data().count);
+      } catch {}
+    }
+  };
+  await Promise.all(Array.from({ length: 12 }, worker));
+  return out;
+}
+
+/** Mengikuti komentar dari RPS mana pun yang menyebut akun ini. onChange(daftar { …komentar, id, sopId }). */
+export function watchMentions(onChange) {
+  let stop = null;
+  let dead = false;
+  load()
+    .then(({ F, db }) => {
+      if (dead) return;
+      const q = F.query(F.collectionGroup(db, 'comments'), F.where('mentions', 'array-contains', faculty.user.email));
+      stop = F.onSnapshot(
+        q,
+        (snap) =>
+          onChange(
+            snap.docs
+              .filter((d) => d.ref.parent.parent?.parent.id === C.sops)
+              .map((d) => {
+                const c = d.data({ serverTimestamps: 'estimate' });
+                return { ...c, id: d.id, sopId: d.ref.parent.parent.id, at: ms(c.at), editedAt: ms(c.editedAt), resolvedAt: ms(c.resolvedAt) };
+              })
+          ),
+        () => {} // indeks belum dipasang atau luring: daftar sebutan kosong saja
+      );
+    })
+    .catch(() => {});
+  return () => {
+    dead = true;
+    stop?.();
+  };
 }
 
 export async function resolveComment(sopId, id, done) {

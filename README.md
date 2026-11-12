@@ -81,6 +81,14 @@ Sudah ada:
     komentar baru dari orang lain langsung muncul. Teks komentar hanya bisa diubah penulisnya; komentar bisa dihapus
     penulisnya, pemilik RPS, dan admin (balasannya ikut terhapus). Komentar terpisah dari isi RPS: tidak masuk riwayat,
     berkas `.rps`, maupun hasil ekspor, dan ekspor mengingatkan bila masih ada komentar yang belum selesai.
+  - **Sebut orang di komentar**: ketik `@` lalu pilih dari saran (hanya anggota yang bisa melihat RPS itu). Orang yang
+    disebut melihat angka di tombol **Pustaka** dan daftar **Menyebut saya** (di bawah pohon folder) berisi komentar
+    dari RPS mana pun yang menyebutnya; klik untuk membuka RPS dan komentarnya.
+  - **Ada komentar**: tiap RPS di daftar menampilkan jumlah komentar yang belum selesai, dan menu **Ada komentar** di
+    bawah pohon folder mendaftar semua RPS yang masih punya komentar terbuka.
+  - **Tautan langsung**: klik kanan RPS (atau tab RPS daring) › **Salin tautan**, atau **Salin tautan** pada komentar.
+    Tautan `…/rps-editor/?rps=ID` membuka RPS itu setelah penerimanya masuk (perlu hak lihat), dan tautan komentar
+    sekaligus menyorot komentarnya.
   - **Rekap CPL** (pilih RPS atau folder › **Rekap CPL**, atau klik kanan folder › **Rekap CPL isinya…**): matriks
     mata kuliah × CPL. Sel berisi persentase nilai akhir mata kuliah yang mengukur CPL itu (seperti tab Rekap nilai di
     Periksa), atau sumbangannya dalam SKS, atau sekadar ✓/○. Baris bawah: jumlah mata kuliah yang menilai tiap CPL dan

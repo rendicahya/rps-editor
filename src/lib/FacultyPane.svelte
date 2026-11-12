@@ -16,6 +16,7 @@
   import ProdiRekapDialog from './ProdiRekapDialog.svelte';
   import { review, setReviewYears, REVIEW_CHOICES, reviewSince, isReviewDue } from './review.svelte.js';
   import { formatTanggal } from './model.js';
+  import { notes, copyLink, markMentionsSeen, unseenMentions } from './comments.svelte.js';
 
   /**
    * openIds: id RPS yang sedang terbuka di tab. onopen(sop), onupload(folder): di App.
@@ -28,7 +29,7 @@
    * onrestoretab(id, json): memuat isi versi lama ke tab yang membuka RPS `id`.
    * onbook(sops, title): menggabungkan `sops` (baris pustaka, berurutan) menjadi satu PDF.
    */
-  let { open = false, active = false, host, tabs, onclose, openIds = [], cansave = true, onopen, onupload, oncreate, onloaded, onrenamed, onbinned, onnotify, tabjson, onrestoretab, onbook } = $props();
+  let { open = false, active = false, host, tabs, onclose, openIds = [], cansave = true, onopen, onupload, oncreate, onloaded, onrenamed, onbinned, onnotify, tabjson, onrestoretab, onbook, onopencomment } = $props();
 
   let moveDialog;
   let view = $state('sops'); // sops | bin | admin
@@ -45,7 +46,7 @@
   let loadError = $state('');
   let history = $state(null); // { id, versions }
   let compare = $state(null); // { title, sources, left, right } untuk dialog Bandingkan versi
-  let dueOnly = $state(false); // daftar hanya RPS yang perlu ditinjau ulang, dari semua folder
+  let only = $state(''); // '' | 'due' (perlu ditinjau) | 'notes' (ada komentar terbuka): dari semua folder
   let usage = $state(null);
   let members = $state([]);
   let newEmail = $state('');
@@ -64,8 +65,13 @@
     if (open && !wasOpen) {
       query = '';
       history = null;
-      dueOnly = false;
+      only = '';
       view = 'sops';
+      // Dibuka dari angka sebutan baru di tombol Pustaka: langsung ke daftar "Menyebut saya".
+      untrack(() => {
+        if (notes.wantMentions) openMentions();
+        notes.wantMentions = false;
+      });
       loaded = false;
     }
     wasOpen = open;
@@ -104,6 +110,7 @@
       bin = r.bin.map(withText);
       folders = f;
       onloaded(r.live);
+      loadCounts(r.live.map((s) => s.id));
     } catch (e) {
       loadError = e.message;
     } finally {
@@ -121,9 +128,34 @@
 
   const words = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
   const isDue = (s) => isReviewDue(s.since, review.years);
-  const matches = (s) => words.every((w) => s.text.includes(w)) && (!dueOnly || isDue(s));
-  const searching = $derived(words.length > 0 || dueOnly);
+  const matches = (s) => words.every((w) => s.text.includes(w)) && (!only || (only === 'due' ? isDue(s) : openCount(s) > 0));
+  const searching = $derived(words.length > 0 || !!only);
   const dueCount = $derived(live.filter(isDue).length);
+
+  // ---- Komentar terbuka per RPS (dihitung sekali tiap daftar dimuat; RPS di tab aktif mengikuti panel komentar) ----
+  let noteCounts = $state(new Map());
+  async function loadCounts(ids) {
+    try {
+      noteCounts = await F.countOpenComments(ids);
+    } catch {}
+  }
+  function openCount(s) {
+    if (notes.sopId === s.id && notes.status === 'ready') return notes.list.filter((c) => !c.parent && !c.resolved).length;
+    return noteCounts.get(s.id) ?? 0;
+  }
+  const notesCount = $derived(live.filter((s) => openCount(s) > 0).length);
+
+  // ---- Komentar yang menyebut akun ini ----
+  let seenBefore = $state(0); // batas "baru" saat daftar dibuka
+  function openMentions() {
+    seenBefore = notes.seen;
+    view = 'mentions';
+    history = null;
+    markMentionsSeen();
+  }
+  const mentions = $derived([...notes.mine].sort((a, b) => b.at - a.at));
+  const sopById = $derived(new Map(live.map((s) => [s.id, s])));
+  const shortText = (t, n = 160) => (t.length > n ? t.slice(0, n) + '…' : t);
   const shownBin = $derived(bin.filter(matches));
 
   // ---- Folder ----
@@ -209,7 +241,7 @@
   });
   const shownFolders = $derived(
     sorted(
-      dueOnly ? [] : searching ? folders.filter((f) => words.every((w) => f.name.toLowerCase().includes(w))) : childrenOf(here),
+      only ? [] : searching ? folders.filter((f) => words.every((w) => f.name.toLowerCase().includes(w))) : childrenOf(here),
       librarySort.by,
       (f) => f.name,
       (f) => activity.get(f.id) ?? 0
@@ -252,7 +284,7 @@
   const selRows = $derived(rows.filter((r) => selected.has(r.key)));
   // Pilihan dikosongkan setiap pindah folder, tampilan, atau pencarian.
   $effect(() => {
-    view, here, query, dueOnly;
+    view, here, query, only;
     untrack(() => {
       selected.clear();
       anchor = null;
@@ -435,7 +467,7 @@
     view = 'sops';
     folderId = id;
     query = '';
-    dueOnly = false;
+    only = '';
     history = null;
     for (const f of pathOf(id)) expanded.add(f.id);
   }
@@ -1059,6 +1091,7 @@
       { label: 'Duplikat', icon: 'copy', run: () => duplicate(s) },
       { label: 'Riwayat', icon: 'history', run: () => toggleHistory(s) },
       { label: 'Bandingkan versi…', icon: 'compare', run: () => compareVersions(s) },
+      { label: 'Salin tautan', icon: 'link', run: async () => onnotify(await copyLink(s.id)) },
       ...(manage ? [{ label: 'Hapus riwayat lama…', icon: 'trash', run: () => pruneOld(s) }] : []),
       { label: accessTip(s), icon: 'users', run: () => openAccess('sops', s) },
       ...(canEdit(s) ? [{ label: 'Ubah nama', icon: 'pencil', hint: 'F2', run: () => rename(s) }] : []),
@@ -1220,8 +1253,8 @@
 {#snippet node(f, depth)}
   {@const kids = childrenOf(f.id)}
   {@const opened = expanded.has(f.id)}
-  <li role="treeitem" aria-selected={view === 'sops' && !dueOnly && here === f.id} aria-expanded={kids.length ? opened : undefined}>
-    <div class="tn" data-id={f.id} class:sel={view === 'sops' && !dueOnly && here === f.id} class:drop={dropAt === f.id} class:dragging={dragged(f.id)} style:padding-left="{depth * 0.9 + 0.2}rem" role="presentation" draggable={canManage(f)} ondragstart={(e) => dragStart(e, f, true)} ondragend={dragEnd} {...dropzone(f.id)} oncontextmenu={(e) => openMenu(e, folderMenu(f))}>
+  <li role="treeitem" aria-selected={view === 'sops' && !only && here === f.id} aria-expanded={kids.length ? opened : undefined}>
+    <div class="tn" data-id={f.id} class:sel={view === 'sops' && !only && here === f.id} class:drop={dropAt === f.id} class:dragging={dragged(f.id)} style:padding-left="{depth * 0.9 + 0.2}rem" role="presentation" draggable={canManage(f)} ondragstart={(e) => dragStart(e, f, true)} ondragend={dragEnd} {...dropzone(f.id)} oncontextmenu={(e) => openMenu(e, folderMenu(f))}>
       {#if kids.length}
         <button type="button" class="chev" class:open={opened} aria-label={opened ? `Tutup ${f.name}` : `Buka ${f.name}`} onclick={() => toggle(f.id)}><Icon name="chevron" size={15} /></button>
       {:else}
@@ -1268,8 +1301,8 @@
         <div class="split" role="separator" aria-orientation="vertical" aria-label="Lebar daftar folder" aria-valuenow={treeW} aria-valuemin={TREE_MIN} tabindex="0" title="Geser untuk mengubah lebar (klik dua kali: lebar awal)" onpointerdown={splitDown} onkeydown={splitKey} ondblclick={() => setTree(TREE_DEFAULT)}></div>
         <div class="tree" role="presentation" oncontextmenu={(e) => openMenu(e, hereItems(null))}>
           <ul role="tree" aria-label="Folder" bind:this={treeEl} onkeydown={treeKey}>
-            <li role="treeitem" aria-selected={view === 'sops' && !dueOnly && !here}>
-              <div class="tn" data-id="" class:sel={view === 'sops' && !dueOnly && !here} class:drop={dropAt === null} style:padding-left="0.2rem" role="presentation" {...dropzone(null)}>
+            <li role="treeitem" aria-selected={view === 'sops' && !only && !here}>
+              <div class="tn" data-id="" class:sel={view === 'sops' && !only && !here} class:drop={dropAt === null} style:padding-left="0.2rem" role="presentation" {...dropzone(null)}>
                 <span class="chev none"></span>
                 <button type="button" class="tname" onclick={() => select(null)}>
                   <Icon name="folder" size={18} />
@@ -1285,14 +1318,29 @@
           <button
             type="button"
             class="tname nav"
-            class:sel={view === 'sops' && dueOnly}
+            class:sel={view === 'sops' && only === 'due'}
             title={`RPS yang disusun lebih dari ${review.years} tahun lalu (menurut tanggal penyusunan)`}
             onclick={() => {
               select(here);
-              dueOnly = true;
+              only = 'due';
             }}
           >
             <Icon name="alert" size={15} /><span>Perlu ditinjau</span>{#if dueCount}<small class="due">{dueCount}</small>{/if}
+          </button>
+          <button
+            type="button"
+            class="tname nav"
+            class:sel={view === 'sops' && only === 'notes'}
+            title="RPS yang masih punya komentar belum selesai"
+            onclick={() => {
+              select(here);
+              only = 'notes';
+            }}
+          >
+            <Icon name="comment" size={15} /><span>Ada komentar</span>{#if notesCount}<small class="notes">{notesCount}</small>{/if}
+          </button>
+          <button type="button" class="tname nav" class:sel={view === 'mentions'} title="Komentar yang menyebut Anda (@email Anda)" onclick={openMentions}>
+            <Icon name="reply" size={15} /><span>Menyebut saya</span>{#if unseenMentions(faculty.user?.uid)}<small class="notes">{unseenMentions(faculty.user?.uid)}</small>{/if}
           </button>
           <button type="button" class="tname nav" class:sel={view === 'bin'} onclick={() => (view = 'bin')}>
             <Icon name="trash" size={15} /><span>Recycle bin</span>{#if bin.length}<small>{bin.length}</small>{/if}
@@ -1303,14 +1351,19 @@
       <section class="content">
         {#if view === 'sops'}
           <div class="crumbs">
-            {#if dueOnly}
+            {#if only === 'due'}
               <span class="muted grow due-head">
                 Perlu ditinjau: disusun lebih dari
                 <select value={review.years} onchange={(e) => setReviewYears(Number(e.currentTarget.value))} aria-label="Jangka tinjauan berkala">
                   {#each REVIEW_CHOICES as y (y)}<option value={y}>{y} tahun</option>{/each}
                 </select>
                 lalu (menurut tanggal penyusunan){words.length ? ', sesuai pencarian' : ''}
-                <button type="button" class="link" onclick={() => (dueOnly = false)}>Tampilkan semua</button>
+                <button type="button" class="link" onclick={() => (only = '')}>Tampilkan semua</button>
+              </span>
+            {:else if only === 'notes'}
+              <span class="muted grow due-head">
+                RPS dengan komentar yang belum selesai{words.length ? ', sesuai pencarian' : ''}
+                <button type="button" class="link" onclick={() => (only = '')}>Tampilkan semua</button>
               </span>
             {:else if searching}
               <span class="muted grow">Hasil pencarian di semua folder</span>
@@ -1374,9 +1427,10 @@
                     {#if !canEdit(s)}<em>Hanya lihat</em>{/if}
                     {#if isOpen(s)}<em>Terbuka di tab</em>{/if}
                     {#if isDue(s)}<em class="due" title={`Disusun ${formatTanggal(s.since)}, lebih dari ${review.years} tahun lalu`}>Perlu ditinjau</em>{/if}
+                    {#if openCount(s)}<em class="notes" title="Komentar yang belum ditandai selesai">{openCount(s)} komentar</em>{/if}
                   </strong>
                   <small title={s.createdByEmail}>
-                    {[searching && folderOf(s) && `di ${pathText(folderOf(s))}`, dueOnly && `disusun ${formatTanggal(s.since)}`, s.nomor, `dibuat ${s.createdBy === faculty.user.uid ? 'Anda' : s.createdByName}`, `diubah ${s.updatedByName}, ${when(s.updatedAt)}`].filter(Boolean).join(' · ')}
+                    {[searching && folderOf(s) && `di ${pathText(folderOf(s))}`, only === 'due' && `disusun ${formatTanggal(s.since)}`, s.nomor, `dibuat ${s.createdBy === faculty.user.uid ? 'Anda' : s.createdByName}`, `diubah ${s.updatedByName}, ${when(s.updatedAt)}`].filter(Boolean).join(' · ')}
                   </small>
                   {#if editors}<small class="editing">✎ Sedang diedit oleh {editors}</small>{/if}
                 </button>
@@ -1427,6 +1481,30 @@
                 {#if !busy && !searching && canAdd(here)}<small>Seret berkas .rps atau .zip ke sini untuk mengunggah banyak RPS sekaligus.</small>{/if}
               </li>
             {/if}
+          </ul>
+        {:else if view === 'mentions'}
+          <div class="crumbs">
+            <span class="muted grow">Komentar yang menyebut Anda, terbaru di atas. Klik untuk membuka RPS dan komentarnya.</span>
+          </div>
+          <ul class="list mentions">
+            {#each mentions as c (c.sopId + '/' + c.id)}
+              {@const s = sopById.get(c.sopId)}
+              <li>
+                <button class="main" disabled={!s} title={s ? 'Buka RPS dan tampilkan komentar ini' : 'RPS ini sudah dihapus, atau Anda tidak punya hak untuk melihatnya'} onclick={() => onopencomment(c.sopId, c.id)}>
+                  <strong>
+                    <Icon name="comment" size={15} />
+                    {s ? titleOf(s) : 'RPS tidak tersedia'}
+                    {#if c.at > seenBefore && c.by !== faculty.user.uid}<em class="notes">Baru</em>{/if}
+                    {#if c.parent}<em>Balasan</em>{:else if c.label}<em>{c.label}</em>{/if}
+                    {#if c.resolved}<em>Selesai</em>{/if}
+                  </strong>
+                  <span class="quote">{shortText(c.text)}</span>
+                  <small>{c.byName} · {when(c.at)}</small>
+                </button>
+              </li>
+            {:else}
+              <li class="empty">Belum ada komentar yang menyebut Anda. Orang lain bisa menyebut Anda dengan mengetik @ lalu email Anda di komentar.</li>
+            {/each}
           </ul>
         {:else if view === 'bin'}
           {@render selBar()}
@@ -2128,6 +2206,24 @@
   small.due {
     color: #92400e !important;
     font-weight: 600;
+  }
+  em.notes {
+    color: var(--accent);
+    background: var(--accent-soft);
+    border-color: var(--accent);
+  }
+  small.notes {
+    color: var(--accent) !important;
+    font-weight: 600;
+  }
+  .mentions .quote {
+    font-size: 0.85rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .mentions .main:disabled {
+    cursor: default;
+    opacity: 0.6;
   }
   .due-head {
     display: flex;
