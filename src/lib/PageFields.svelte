@@ -1,6 +1,8 @@
 <script module>
   // Panel pilihan yang sedang terbuka (id isian pick); hanya satu di seluruh dokumen.
   let openPick = $state(null);
+  // Baris yang sedang diseret ('r:<daftar>:<id>'); barisnya diredupkan di semua halaman.
+  let dragRow = $state(null);
 </script>
 
 <script>
@@ -199,6 +201,115 @@
     insertAt('lembarKerja', n, lk);
   }
   const subsOf = (a) => app.doc.subCpmk.filter((s) => (a.porsi[s.id] ?? 0) > 0).map((s) => s.id);
+
+  // ---------------------------------------------------------------------------
+  // Seret-lepas baris lewat pegangan ⠿. Posisi jatuh dihitung dari kotak baris-baris daftar yang sama di semua
+  // halaman, jadi bisa melintasi halaman; halaman bergulir sendiri bila penunjuk di dekat tepi atas/bawah.
+  // ---------------------------------------------------------------------------
+  let drop = $state(null); // { x, y, w } garis penanda (koordinat layar)
+
+  function startDrag(e, r) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const handle = e.currentTarget;
+    handle.setPointerCapture(e.pointerId);
+    const scroller = handle.closest('.preview-scroll');
+    const prefix = `r:${r.list}:`;
+    let target = null; // { id, after }
+    let px = e.clientX;
+    let py = e.clientY;
+    let raf = 0;
+    dragRow = prefix + r.id;
+    document.body.classList.add('row-dragging');
+
+    function locate() {
+      const groups = [...document.querySelectorAll(`.f-group[data-hot^="${prefix}"]`)];
+      let best = null;
+      let dist = Infinity;
+      for (const g of groups) {
+        const id = g.dataset.hot.slice(prefix.length).split(':')[0];
+        if (id === '-1') continue;
+        const b = g.getBoundingClientRect();
+        if (px < b.left - 40 || px > b.right + 40) continue;
+        const d = py < b.top ? b.top - py : py > b.bottom ? py - b.bottom : 0;
+        if (d < dist) [best, dist] = [{ id, b }, d];
+      }
+      if (!best || dist > 60) {
+        target = null;
+        drop = null;
+        return;
+      }
+      const after = py > (best.b.top + best.b.bottom) / 2;
+      target = { id: best.id, after };
+      drop = { x: best.b.left, y: after ? best.b.bottom : best.b.top, w: best.b.width };
+    }
+    function edgeScroll() {
+      raf = 0;
+      if (!scroller) return;
+      const b = scroller.getBoundingClientRect();
+      const zone = 48;
+      const d = py < b.top + zone ? -(b.top + zone - py) : py > b.bottom - zone ? py - (b.bottom - zone) : 0;
+      if (!d) return;
+      scroller.scrollTop += Math.max(-24, Math.min(24, d / 2));
+      locate();
+      raf = requestAnimationFrame(edgeScroll);
+    }
+    function onMove(ev) {
+      px = ev.clientX;
+      py = ev.clientY;
+      locate();
+      if (!raf) raf = requestAnimationFrame(edgeScroll);
+    }
+    function finish(ok) {
+      handle.removeEventListener('pointermove', onMove);
+      handle.removeEventListener('pointerup', up);
+      handle.removeEventListener('pointercancel', cancel);
+      window.removeEventListener('keydown', key, true);
+      scroller?.removeEventListener('scroll', locate);
+      if (raf) cancelAnimationFrame(raf);
+      document.body.classList.remove('row-dragging');
+      dragRow = null;
+      drop = null;
+      if (ok && target) moveTo(r.list, r.id, target.id, target.after);
+    }
+    const up = () => finish(true);
+    const cancel = () => finish(false);
+    function key(ev) {
+      if (ev.key !== 'Escape') return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      finish(false);
+    }
+    handle.addEventListener('pointermove', onMove);
+    handle.addEventListener('pointerup', up);
+    handle.addEventListener('pointercancel', cancel);
+    window.addEventListener('keydown', key, true);
+    scroller?.addEventListener('scroll', locate);
+  }
+
+  const isDragged = (f) => !!dragRow && (f.hot === dragRow || f.hot.startsWith(dragRow + ':'));
+
+  function portal(node) {
+    document.body.appendChild(node);
+    return { destroy: () => node.remove() };
+  }
+
+  /** Pindahkan item `id` ke sebelum/sesudah item `targetId` dalam satu langkah Undo. */
+  function moveTo(list, id, targetId, after) {
+    if (id === targetId) return;
+    const L = app.doc[list];
+    const from = L.findIndex((x) => x.id === id);
+    if (from < 0) return;
+    const rest = L.filter((x) => x.id !== id);
+    const t = rest.findIndex((x) => x.id === targetId);
+    if (t < 0) return;
+    const to = after ? t + 1 : t;
+    if (to === from) return;
+    asStep(() => {
+      const [item] = L.splice(from, 1);
+      L.splice(to, 0, item);
+    });
+  }
 
   // Kelompok isian yang sedang disorot/difokus (satu baris daftar): alatnya ditampilkan.
   let hover = $state(null);
@@ -410,11 +521,14 @@
   {#each fields as f (f.id)}
     {#if f.kind === 'row-tools'}
       {@const r = rowOf(f.hot)}
-      <div class="f-group" class:hot={isHot(f)} style={box(f)} data-hot={f.hot} data-fid={f.id}>
+      <div class="f-group" class:hot={dragRow ? isDragged(f) : isHot(f)} class:dragged={isDragged(f)} style={box(f)} data-hot={f.hot} data-fid={f.id}>
         {#if f.empty}
           <button class="f-hint add-first" onclick={() => addAfter(f.list, -1)}>+ Tambah {f.empty}</button>
         {:else if r}
           <span class="g-tools" class:g-top={f.top} class:g-left={!f.top}>
+            {#if f.count > 1}
+              <button tabindex="-1" class="grip" title="Seret untuk memindahkan (Esc membatalkan)" aria-label="Seret untuk memindahkan" onpointerdown={(e) => startDrag(e, r)}>⠿</button>
+            {/if}
             <button tabindex="-1" title="Naikkan" aria-label="Naikkan" aria-disabled={r.index === 0} onclick={() => move(r.list, r.index, -1)}>{f.top ? '◀' : '▲'}</button>
             <button tabindex="-1" title="Turunkan" aria-label="Turunkan" aria-disabled={r.index === f.count - 1} onclick={() => move(r.list, r.index, 1)}>{f.top ? '▶' : '▼'}</button>
             <button tabindex="-1" title="Duplikat" aria-label="Duplikat" onclick={() => duplicate(r.list, r.index)}>⧉</button>
@@ -536,6 +650,10 @@
     {/if}
   {/each}
 </div>
+{#if drop}
+  <!-- Di <body>: halaman memakai container query, jadi position: fixed di dalamnya tidak mengikuti layar. -->
+  <div class="drop-line" use:portal style="left:{drop.x}px;top:{drop.y}px;width:{drop.w}px"></div>
+{/if}
 {#if ctx}
   {#key ctx}<ContextMenu x={ctx.x} y={ctx.y} items={ctx.items} onclose={() => (ctx = null)} />{/key}
 {/if}
@@ -719,6 +837,31 @@
   .g-tools button.danger:hover {
     background: #c0392b;
     color: #fff;
+  }
+  .g-tools button.grip {
+    cursor: grab;
+    touch-action: none;
+    font-size: 12px;
+  }
+  .f-group.dragged {
+    background: rgb(var(--edit) / 0.1);
+    outline: 1.5px dashed rgb(var(--edit) / 0.6);
+    outline-offset: -1px;
+  }
+  .drop-line {
+    position: fixed;
+    z-index: 50;
+    height: 3px;
+    margin-top: -1.5px;
+    border-radius: 2px;
+    background: rgb(var(--edit));
+    box-shadow: 0 0 0 1px #fff;
+    pointer-events: none;
+  }
+  :global(body.row-dragging),
+  :global(body.row-dragging *) {
+    cursor: grabbing !important;
+    user-select: none !important;
   }
   .g-tools button[aria-disabled='true'] {
     opacity: 0.35;

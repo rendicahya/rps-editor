@@ -29,6 +29,9 @@ Sudah ada:
   - Sorot baris CPL/CPMK/Sub-CPMK/asesmen/pertemuan (atau kop Lembar Kerja) untuk menaikkan, menurunkan,
     menduplikat, menambah, atau menghapusnya; tombol **P/K** mengganti pertemuan praktikum/kuliah. Menu klik kanan
     berisi aksi yang sama, plus "Buat Lembar Kerja untuk asesmen ini" dan pindah jenis pustaka.
+  - **Seret-lepas**: seret pegangan **⠿** di alat baris ke posisi baru (garis biru menandai letak jatuhnya), juga
+    melintasi halaman; halaman bergulir sendiri di dekat tepi. Satu seretan = satu langkah Undo, Esc membatalkan.
+    Nomor pekan pertemuan tidak ikut berubah.
   - Menghapus CPL/CPMK/Sub-CPMK/pustaka/asesmen ikut menghapus rujukan ke item itu.
   - Pertemuan baru mengikuti pola kuliah → praktikum di pekan yang sama → kuliah pekan berikutnya.
 
@@ -103,9 +106,6 @@ Sudah ada:
 - **Properti dokumen** (menu Ekspor, atau tombol di pratinjau PDF): judul, penulis, subjek, dan kata kunci di
   metadata PDF dan DOCX. Disimpan di dalam berkas `.rps` (ikut Undo dan Pustaka Daring). Kolom kosong memakai bawaan: judul "RPS <mata kuliah>", penulis
   dari dosen pengelola, subjek "Rencana Pembelajaran Semester <kode>, Program Studi <prodi>".
-
-Rencana berikutnya:
-1. Seret-lepas untuk mengurutkan baris.
 
 ## Firebase
 
