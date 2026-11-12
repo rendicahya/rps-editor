@@ -62,6 +62,9 @@ Sudah ada:
   - Pilih banyak item dengan Ctrl/Shift+klik, lalu pindahkan (seret, potong-tempel, atau keyboard) atau hapus
     sekaligus. Pemindahan dan pemindahan ke Recycle bin bisa diurungkan dari pesan yang muncul (atau Ctrl+Z).
   - Daftar Lokal dan Daring bisa diurutkan menurut nama atau waktu terakhir diubah.
+  - **Duplikat** menghasilkan RPS milik penyalinnya dengan hak akses yang sama seperti aslinya: semua yang bisa
+    melihat atau mengedit aslinya mendapat hak yang sama pada salinan (ditandai **Khusus** bila berbeda dari folder
+    tempatnya).
   - **Riwayat lama bisa dihapus** oleh pemilik RPS dan admin: per versi, atau sekaligus lewat **Hapus riwayat lama…**
     dengan menyisakan sejumlah versi terbaru (0 = seluruh riwayat; isi saat ini tetap utuh). Ruangnya dikembalikan ke
     kuota pustaka. Tidak bisa dibatalkan.

@@ -1223,12 +1223,12 @@
   <li role="treeitem" aria-selected={view === 'sops' && !dueOnly && here === f.id} aria-expanded={kids.length ? opened : undefined}>
     <div class="tn" data-id={f.id} class:sel={view === 'sops' && !dueOnly && here === f.id} class:drop={dropAt === f.id} class:dragging={dragged(f.id)} style:padding-left="{depth * 0.9 + 0.2}rem" role="presentation" draggable={canManage(f)} ondragstart={(e) => dragStart(e, f, true)} ondragend={dragEnd} {...dropzone(f.id)} oncontextmenu={(e) => openMenu(e, folderMenu(f))}>
       {#if kids.length}
-        <button type="button" class="chev" class:open={opened} aria-label={opened ? `Tutup ${f.name}` : `Buka ${f.name}`} onclick={() => toggle(f.id)}><Icon name="chevron" size={13} /></button>
+        <button type="button" class="chev" class:open={opened} aria-label={opened ? `Tutup ${f.name}` : `Buka ${f.name}`} onclick={() => toggle(f.id)}><Icon name="chevron" size={15} /></button>
       {:else}
         <span class="chev none"></span>
       {/if}
       <button type="button" class="tname" onclick={() => select(f.id)}>
-        <Icon name="folder" size={15} />
+        <Icon name="folder" size={18} />
         <span>{f.name}</span>
         {#if counts.get(f.id)}<small>{counts.get(f.id)}</small>{/if}
       </button>
@@ -1272,7 +1272,7 @@
               <div class="tn" data-id="" class:sel={view === 'sops' && !dueOnly && !here} class:drop={dropAt === null} style:padding-left="0.2rem" role="presentation" {...dropzone(null)}>
                 <span class="chev none"></span>
                 <button type="button" class="tname" onclick={() => select(null)}>
-                  <Icon name="folder" size={15} />
+                  <Icon name="folder" size={18} />
                   <span>Utama</span>
                   {#if counts.get(null)}<small>{counts.get(null)}</small>{/if}
                 </button>
@@ -1351,7 +1351,7 @@
               <li data-key={row.key} class:sel={selected.has(row.key)} class:drop={dropAt === f.id} class:dragging={dragged(f.id)} draggable={canManage(f)} ondragstart={(e) => dragStart(e, f, true)} ondragend={dragEnd} {...dropzone(f.id)} oncontextmenu={(e) => rowMenu(e, row)}>
                 {@render pick(row)}
                 <button class="main" onclick={(e) => rowClick(e, row, () => enterFolder(f.id))} onfocus={() => (cursor = row.key)}>
-                  <strong><Icon name="folder" size={15} /> {f.name} <em class:shared={F.isShared(f)}>{accessLabel(f)}</em></strong>
+                  <strong><Icon name="folder" size={18} /> {f.name} <em class:shared={F.isShared(f)}>{accessLabel(f)}</em></strong>
                   <small>{[searching && parent && `di ${pathText(parent)}`, folderInfo(f), `dibuat ${f.createdBy === faculty.user.uid ? 'Anda' : f.createdByName}`].filter(Boolean).join(' · ')}</small>
                 </button>
                 <span class="acts" role="group" aria-label="Tindakan folder">
@@ -1826,8 +1826,8 @@
     align-items: center;
     justify-content: center;
     flex: none;
-    width: 1.2rem;
-    height: 1.2rem;
+    width: 1.5rem;
+    height: 1.5rem;
     padding: 0;
     border: 0;
     background: none;
@@ -1845,13 +1845,13 @@
     min-width: 0;
     display: flex;
     align-items: center;
-    gap: 0.35rem;
-    padding: 0.28rem 0.35rem 0.28rem 0.1rem;
+    gap: 0.45rem;
+    padding: 0.42rem 0.4rem 0.42rem 0.1rem;
     border: 0;
     background: none;
     color: inherit;
     font: inherit;
-    font-size: 0.85rem;
+    font-size: 0.95rem;
     text-align: left;
     cursor: pointer;
   }
@@ -1868,7 +1868,7 @@
   .tname small {
     flex: none;
     color: var(--muted);
-    font-size: 0.72rem;
+    font-size: 0.78rem;
   }
   aside nav {
     flex: none;
@@ -1963,7 +1963,7 @@
     font: inherit;
   }
   .main strong :global(svg) {
-    vertical-align: -2px;
+    vertical-align: -3px;
     color: var(--muted);
   }
   .main.static {

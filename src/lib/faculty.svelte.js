@@ -538,8 +538,23 @@ export async function pruneVersion(id, rev) {
   }).catch(failed);
 }
 
-/** Hasil duplikat berdiri sendiri: pemiliknya akun ini, dan hak aksesnya mengikuti folder tempatnya. */
-export const duplicateSop = (sop) => uploadSop(JSON.parse(sop.json), `Salinan dari ${sop.title || 'RPS tanpa judul'}`.slice(0, 300), sop.folder);
+/**
+ * Hasil duplikat: pemiliknya akun ini, dan siapa pun yang bisa melihat atau mengedit aslinya mendapat hak yang sama
+ * pada salinan. Server hanya menerima RPS baru yang mengikuti foldernya, jadi daftar hak dipasang sesudahnya bila
+ * berbeda; bila langkah itu gagal, salinan tetap ada dengan hak dari foldernya.
+ */
+export async function duplicateSop(sop) {
+  const copy = await uploadSop(JSON.parse(sop.json), `Salinan dari ${sop.title || 'RPS tanpa judul'}`.slice(0, 300), sop.folder);
+  const me = faculty.user.email;
+  const want = { readers: union(sop.readers ?? [], [me]), editors: union(sop.editors ?? [], [me]) };
+  const { F, db } = await load();
+  const snap = await F.getDocFromServer(F.doc(db, C.sops, copy.id)).catch(() => null);
+  const got = snap?.data();
+  if (got && (!sameList(got.readers, want.readers) || !sameList(got.editors, want.editors))) {
+    await setAccess('sops', copy.id, { custom: true, ...want }).catch(() => {});
+  }
+  return copy;
+}
 
 async function patch(id, data) {
   const { F, db } = await load();

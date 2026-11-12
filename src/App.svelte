@@ -36,7 +36,27 @@
   let toast = $state(null); // { msg, action, n }
   let toastTimer;
 
-  const { needRefresh, offlineReady, updateServiceWorker } = useRegisterSW();
+  // Versi baru dicari bukan hanya saat halaman dimuat: juga tiap 10 menit dan setiap kali tab/jendela aplikasi kembali
+  // dibuka, sehingga tombol "Muat ulang" muncul tanpa perlu memuat ulang halaman lebih dulu.
+  const UPDATE_EVERY = 10 * 60 * 1000;
+  const { needRefresh, offlineReady, updateServiceWorker } = useRegisterSW({
+    onRegisteredSW(swUrl, reg) {
+      if (!reg) return;
+      let last = 0;
+      const check = async () => {
+        if (reg.installing || !navigator.onLine || Date.now() - last < 60000) return;
+        last = Date.now();
+        try {
+          // Hanya bila server terjangkau; reg.update() sendiri melempar galat bila luring.
+          const res = await fetch(swUrl, { cache: 'no-store', headers: { 'cache-control': 'no-cache' } });
+          if (res.ok) await reg.update();
+        } catch {}
+      };
+      setInterval(check, UPDATE_EVERY);
+      document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && check());
+      window.addEventListener('online', check);
+    }
+  });
 
   // Preferensi tampilan (per browser).
   const setPref = (key, value) => {
