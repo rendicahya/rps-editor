@@ -7,7 +7,7 @@
   import AiDialog from './lib/AiDialog.svelte';
   import { sampleDocument } from './lib/sample.js';
   import { layoutDocument } from './lib/layout.js';
-  import { exportPdf, rpsFromPdf } from './lib/pdf.js';
+  import { exportPdf, rpsFromPdf, PDF_PROTECT } from './lib/pdf.js';
   import { fontSource, useSystemCalibri, useCalibriFiles } from './lib/fonts.js';
   import { saveJson, openJsonFile, slug, rpsName } from './lib/files.js';
   import Preview from './lib/Preview.svelte';
@@ -865,12 +865,32 @@
   // Ekspor PDF selalu lewat pratinjau dulu; unduhan dilakukan dari dialog.
   let pdfDoc = $state(null);
   let pdfSaved;
-  function pdf() {
+  // Perlindungan isi PDF (lihat PDF_PROTECT), diingat per browser.
+  let pdfProtect = $state(PDF_PROTECT.includes(getPref('pdfProtect')) ? getPref('pdfProtect') : 'none');
+  let pdfBusy = $state(false);
+  async function pdf() {
+    if (pdfBusy) return;
+    pdfBusy = true;
     try {
       pdfSaved = fileMark();
-      pdfDoc = exportPdf(app.doc);
+      pdfDoc = await exportPdf(app.doc, pdfProtect);
     } catch (e) {
       ui.alert('Gagal membuat PDF: ' + e.message);
+    } finally {
+      pdfBusy = false;
+    }
+  }
+  async function setPdfProtect(mode) {
+    pdfProtect = mode;
+    setPref('pdfProtect', mode);
+    if (!pdfDoc) return;
+    pdfBusy = true;
+    try {
+      pdfDoc = await exportPdf(app.doc, mode);
+    } catch (e) {
+      ui.alert('Gagal membuat PDF: ' + e.message);
+    } finally {
+      pdfBusy = false;
     }
   }
 
@@ -1219,6 +1239,9 @@
   <PdfPreviewDialog
     bind:pdf={pdfDoc}
     ondownload={() => pdfSaved?.()}
+    protect={pdfProtect}
+    busy={pdfBusy}
+    onprotect={setPdfProtect}
     {pages}
     filename={`RPS-${slug(docTitle(app.doc))}.pdf`}
     fontNote={docFont === 'calibri' ? '' : 'Calibri belum tersedia, PDF memakai Carlito (ukuran identik)'}

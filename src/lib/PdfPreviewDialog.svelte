@@ -3,7 +3,14 @@
   import { dismiss } from './dismiss.js';
 
   /** pdf: objek jsPDF hasil exportPdf; pages: tata letak (cadangan bila browser tak bisa menampilkan PDF). */
-  let { pdf = $bindable(null), pages, filename, fontNote = '', ondownload } = $props();
+  let { pdf = $bindable(null), pages, filename, fontNote = '', ondownload, protect = 'none', busy = false, onprotect } = $props();
+
+  const PROTECT = [
+    ['none', 'Bisa disalin', 'Teks bisa diseleksi dan disalin. PDF bisa dibuka lagi di RPS Editor untuk diedit.'],
+    ['lock', 'Dikunci', 'Teks tetap tajam, tetapi PDF hanya boleh dicetak: salin dan ubah dilarang. Dipatuhi Acrobat, Chrome, dan Edge; sebagian penampil (mis. Firefox) mengabaikannya. Tidak bisa dibuka lagi di RPS Editor.'],
+    ['image', 'Gambar', 'Setiap halaman menjadi gambar sehingga teks sama sekali tidak bisa diseleksi di penampil mana pun. Berkas lebih besar dan tidak bisa dibuka lagi di RPS Editor.']
+  ];
+  const protectInfo = $derived(PROTECT.find(([v]) => v === protect) ?? PROTECT[0]);
 
   let dialog;
   // Browser seluler (mis. Chrome Android) tidak bisa menampilkan PDF di dalam halaman.
@@ -32,10 +39,12 @@
     else if (!pdf && dialog.open) dialog.close();
   });
 
-  // Nama berkas unduhan bisa diubah; diisi ulang setiap pratinjau baru dibuka.
+  // Nama berkas unduhan bisa diubah; diisi ulang setiap pratinjau baru dibuka (bukan saat PDF dibuat ulang).
   let name = $state('');
+  let shown = false;
   $effect(() => {
-    if (pdf) name = filename.replace(/\.pdf$/i, '');
+    if (pdf && !shown) name = filename.replace(/\.pdf$/i, '');
+    shown = !!pdf;
   });
 
   function download() {
@@ -53,14 +62,23 @@
       <small>{size}{fontNote ? ' · ' + fontNote : ''}</small>
     </div>
     <div class="actions">
+      <label class="protect" title={protectInfo[2]}>
+        <span>Isi PDF</span>
+        <select value={protect} disabled={busy} onchange={(e) => onprotect?.(e.currentTarget.value)} aria-label="Perlindungan isi PDF">
+          {#each PROTECT as [v, label] (v)}<option value={v}>{label}</option>{/each}
+        </select>
+      </label>
       <label class="fname" title="Nama berkas PDF yang diunduh">
         <input bind:value={name} aria-label="Nama berkas PDF" onkeydown={(e) => e.key === 'Enter' && download()} />
         <span>.pdf</span>
       </label>
       <button type="button" class="btn" onclick={() => (pdf = null)}>Kembali ke editor</button>
-      <button type="button" class="btn primary" onclick={download}>Unduh PDF</button>
+      <button type="button" class="btn primary" disabled={busy} onclick={download}>Unduh PDF</button>
     </div>
   </header>
+  {#if protect !== 'none'}
+    <p class="protect-note">{busy ? 'Membuat ulang PDF…' : protectInfo[2]}</p>
+  {/if}
   {#if url}
     {#if inline}
       <iframe src={url + '#view=FitH'} title="Pratinjau PDF"></iframe>
@@ -120,6 +138,24 @@
   .actions {
     flex-wrap: wrap;
     align-items: center;
+  }
+  .protect {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+  }
+  .protect select {
+    width: auto;
+  }
+  .protect-note {
+    margin: 0;
+    padding: 0.45rem 1rem;
+    font-size: 0.8rem;
+    line-height: 1.4;
+    background: var(--warn-bg);
+    border-bottom: 1px solid var(--warn-line);
   }
   .fname {
     display: flex;

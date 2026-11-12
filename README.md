@@ -64,6 +64,11 @@ Sudah ada:
   - *Revisi RPS ini* sesuai instruksi; hasilnya menggantikan dokumen aktif dan bisa di-Undo.
   - Jawaban boleh terbungkus ```json``` atau berisi kalimat pengantar; rujukan boleh berupa kode.
 - PDF hasil ekspor menyertakan data `.rps` (JSON) sebagai lampiran, sehingga PDF bisa dibuka lagi untuk diedit.
+  Pilihan **Isi PDF** di dialog pratinjau (diingat per browser): **Bisa disalin** (bawaan), **Dikunci** (PDF
+  terenkripsi dengan izin cetak saja; salin dan ubah dilarang di Acrobat, Chrome, Edge, tetapi sebagian penampil
+  seperti Firefox mengabaikannya), atau **Gambar** (tiap halaman menjadi gambar 250 dpi sehingga teks sama sekali
+  tidak bisa diseleksi; berkas lebih besar). PDF yang dikunci atau berupa gambar tidak berisi data RPS, jadi tidak bisa
+  dibuka lagi di editor.
 
 Rencana berikutnya:
 1. Seret-lepas untuk mengurutkan baris.

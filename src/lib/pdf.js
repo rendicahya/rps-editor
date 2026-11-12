@@ -7,18 +7,55 @@ import { docTitle } from './model.js';
 
 const orientation = (page) => (page.w > page.h ? 'landscape' : 'portrait');
 
-export function exportPdf(doc) {
-  const pages = layoutDocument(doc);
-  const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: orientation(pages[0]), compress: true });
+/**
+ * Perlindungan isi PDF:
+ * - none: teks bisa diseleksi dan disalin; data RPS disisipkan agar PDF bisa dibuka lagi di editor.
+ * - lock: PDF terenkripsi dengan izin cetak saja (tanpa salin dan ubah). Dipatuhi Acrobat, Chrome, Edge, dll.,
+ *   tetapi sebagian penampil mengabaikannya. Data RPS tidak disisipkan.
+ * - image: setiap halaman menjadi gambar (teks tidak ada sama sekali), ditambah izin seperti `lock`.
+ */
+export const PDF_PROTECT = ['none', 'lock', 'image'];
+
+function newPdf(doc, first, protect) {
+  const pdf = new jsPDF({
+    unit: 'mm',
+    format: 'a4',
+    orientation: orientation(first),
+    compress: true,
+    // Kata sandi pemilik acak: tidak ada yang bisa membuka PDF dengan hak penuh untuk mencabut larangan.
+    ...(protect !== 'none' && { encryption: { userPassword: '', ownerPassword: randomPassword(), userPermissions: ['print'] } })
+  });
   pdf.setProperties({ title: `RPS ${docTitle(doc)}`.trim(), creator: 'RPS Editor' });
+  return pdf;
+}
+
+function randomPassword() {
+  const a = new Uint8Array(24);
+  crypto.getRandomValues(a);
+  return Array.from(a, (b) => (b % 94) + 33).map((c) => String.fromCharCode(c)).join('');
+}
+
+export async function exportPdf(doc, protect = 'none') {
+  const pages = layoutDocument(doc);
+  const pdf = newPdf(doc, pages[0], protect);
+  if (protect === 'image') {
+    const { renderPage, loadDocFonts } = await import('./pageImage.js');
+    await loadDocFonts();
+    const images = new Map();
+    for (let i = 0; i < pages.length; i++) {
+      if (i > 0) pdf.addPage('a4', orientation(pages[i]));
+      const canvas = await renderPage(pages[i], images, 250);
+      pdf.addImage(canvas, 'PNG', 0, 0, pages[i].w, pages[i].h, undefined, 'FAST');
+    }
+    return pdf;
+  }
   pdf.setLineJoin('miter');
   registerFonts(pdf);
-
   pages.forEach((page, i) => {
     if (i > 0) pdf.addPage('a4', orientation(page));
     for (const it of page.items) drawItem(pdf, it);
   });
-  attachRps(pdf, doc);
+  if (protect === 'none') attachRps(pdf, doc);
   return pdf;
 }
 
