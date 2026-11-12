@@ -1080,14 +1080,47 @@
   }
   const adminAct = (fn) => fn().catch((e) => ui.alert(e.message)).finally(refreshAdmin);
 
-  function addMember(e) {
-    e.preventDefault();
-    const email = newEmail.trim().toLowerCase();
-    if (!/^[^@\s/]+@(ub\.ac\.id|gmail\.com)$/.test(email)) return ui.alert('Masukkan alamat email @ub.ac.id atau @gmail.com.');
-    newEmail = '';
-    const existing = members.find((m) => m.email === email);
-    const kept = existing?.groups ?? [];
-    adminAct(() => F.setMember(email, newRole, newGroup ? [...new Set([...kept, newGroup])] : kept));
+  /** Email dari teks yang dipisah koma, spasi, titik koma, atau baris; "Nama <email>" juga diterima. */
+  function parseEmails(text) {
+    const good = new Set();
+    const bad = [];
+    for (const raw of text.split(/[\s,;]+/)) {
+      const t = raw.replace(/^[<("'[]+|[>)"'\]]+$/g, '').toLowerCase();
+      if (!t.includes('@')) continue; // potongan nama, mis. dari "Nama Lengkap <email>"
+      if (/^[^@\s/]+@(ub\.ac\.id|gmail\.com)$/.test(t)) good.add(t);
+      else bad.push(raw);
+    }
+    return { good: [...good], bad };
+  }
+  const emailCount = $derived(parseEmails(newEmail).good.length);
+
+  async function addMember(e) {
+    e?.preventDefault();
+    const { good, bad } = parseEmails(newEmail);
+    if (!good.length) return ui.alert('Masukkan alamat email @ub.ac.id atau @gmail.com. Beberapa email bisa dipisah koma, spasi, titik koma, atau baris baru.');
+    if (bad.length && !(await ui.confirm(`${bad.length} alamat dilewati karena bukan email @ub.ac.id atau @gmail.com yang sah:\n${bad.join(', ')}\n\nTetap tambahkan ${good.length} email lainnya?`, { title: 'Tambah anggota', ok: 'Tambahkan' }))) return;
+    const known = new Set(members.map((m) => m.email));
+    const fresh = good.filter((x) => !known.has(x));
+    const role = newRole;
+    const group = newGroup;
+    try {
+      await F.addMembers(good, role, group, members);
+      newEmail = '';
+      const already = good.length - fresh.length;
+      const gname = group ? groups.find((g) => g.id === group)?.name : '';
+      if (good.length > 1 || already) {
+        ui.alert(
+          `${fresh.length} anggota baru ditambahkan${fresh.length ? ` sebagai ${role === 'admin' ? 'admin' : 'anggota'}` : ''}.` +
+            (already ? ` ${already} sudah terdaftar${gname ? ` dan dimasukkan ke grup ${gname}` : ''}; perannya tidak diubah.` : '') +
+            (bad.length ? ` ${bad.length} alamat tidak sah dilewati.` : ''),
+          { title: 'Tambah anggota' }
+        );
+      }
+    } catch (err) {
+      ui.alert(err.message);
+    } finally {
+      refreshAdmin();
+    }
   }
 
   const groupNames = (m) => m.groups.map((id) => groups.find((g) => g.id === id)?.name).filter(Boolean);
@@ -1425,8 +1458,20 @@
         </section>
         <section>
           <h3>Anggota <span class="muted">{members.length}</span></h3>
-          <form onsubmit={addMember} class="row">
-            <input bind:value={newEmail} type="email" placeholder="nama@ub.ac.id atau nama@gmail.com" aria-label="Email anggota baru" />
+          <form onsubmit={addMember} class="row add-members">
+            <textarea
+              bind:value={newEmail}
+              rows={newEmail.includes('\n') || emailCount > 1 ? 4 : 1}
+              placeholder="nama@ub.ac.id atau nama@gmail.com; beberapa email dipisah koma, spasi, atau baris"
+              aria-label="Email anggota baru"
+              onkeydown={(e) => {
+                // Enter menambahkan; Shift+Enter untuk baris baru (menempel daftar email tetap bisa).
+                if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
+                  e.preventDefault();
+                  addMember();
+                }
+              }}
+            ></textarea>
             <select bind:value={newRole} aria-label="Peran">
               <option value="member">Anggota</option>
               <option value="admin">Admin</option>
@@ -1437,8 +1482,9 @@
                 {#each groups as g (g.id)}<option value={g.id}>{g.name}</option>{/each}
               </select>
             {/if}
-            <button class="ib" aria-label="Tambah anggota" data-tip="Tambah anggota" disabled={!newEmail.trim()}><Icon name="plus" /></button>
+            <button class="ib" aria-label="Tambah anggota" data-tip={emailCount > 1 ? `Tambah ${emailCount} anggota` : 'Tambah anggota'} disabled={!newEmail.trim()}><Icon name="plus" /></button>
           </form>
+          {#if emailCount > 1}<small class="muted">{emailCount} email akan ditambahkan.</small>{/if}
           <ul class="members">
             {#each members as m (m.email)}
               {@const self = m.email === faculty.user.email}
@@ -2202,9 +2248,19 @@
     gap: 0.4rem;
     margin-top: 0.5rem;
   }
-  .row input {
+  .row input,
+  .add-members textarea {
     flex: 1;
     min-width: 12rem;
+  }
+  .add-members {
+    align-items: flex-start;
+  }
+  .add-members textarea {
+    resize: vertical;
+    font: inherit;
+    min-height: 2.1rem;
+    box-sizing: border-box;
   }
   .members {
     list-style: none;

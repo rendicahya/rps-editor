@@ -761,6 +761,28 @@ export async function setMember(email, role, groups = []) {
   await F.setDoc(F.doc(db, 'members', email), { role, groups, addedBy: faculty.user.email, addedAt: F.serverTimestamp() });
 }
 
+/**
+ * Mendaftarkan banyak email sekaligus dengan `role` dan grup `group` (boleh kosong). Anggota yang sudah terdaftar
+ * tidak berubah perannya; hanya dimasukkan ke `group`. `members` adalah hasil listMembers.
+ */
+export async function addMembers(emails, role, group, members) {
+  const { F, db } = await load();
+  const known = new Map(members.map((m) => [m.email, m]));
+  const writes = [];
+  for (const email of emails) {
+    const ref = F.doc(db, 'members', email);
+    const m = known.get(email);
+    if (!m) writes.push((b) => b.set(ref, { role, groups: group ? [group] : [], addedBy: faculty.user.email, addedAt: F.serverTimestamp() }));
+    else if (group && !m.groups.includes(group)) writes.push((b) => b.update(ref, { groups: F.arrayUnion(group) }));
+  }
+  for (let i = 0; i < writes.length; i += WRITE_CHUNK) {
+    const b = F.writeBatch(db);
+    writes.slice(i, i + WRITE_CHUNK).forEach((w) => w(b));
+    await b.commit();
+  }
+  if (group && emails.includes(faculty.user.email)) faculty.groups = union(faculty.groups, [group]);
+}
+
 export async function removeMember(email) {
   const { F, db } = await load();
   await F.deleteDoc(F.doc(db, 'members', email));

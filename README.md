@@ -48,6 +48,9 @@ Sudah ada:
 - **Pengingat tinjauan berkala**: RPS yang tanggal penyusunannya lebih dari 1–5 tahun lalu (dipilih di panel Periksa,
   bawaan 2 tahun; diingat per browser) diberi peringatan "sebaiknya ditinjau ulang". Di Pustaka Daring, RPS itu
   berlencana **Perlu ditinjau** dan bisa didaftar sekaligus lewat **Perlu ditinjau** di bawah pohon folder.
+- **Tambah anggota sekaligus** (tab Admin di Pustaka Daring): tempel banyak email, dipisah koma, spasi, titik koma,
+  atau baris baru (format "Nama &lt;email&gt;" juga diterima). Email yang sudah terdaftar tidak diubah perannya, hanya
+  dimasukkan ke grup yang dipilih; alamat yang tidak sah dilewati setelah konfirmasi.
 
 - **Pustaka Daring**: folder, hak akses per anggota/grup (plus pilihan akses umum: Private, semua anggota bisa
   melihat, atau semua anggota bisa mengedit), riwayat, recycle bin, dan keterangan "sedang diedit".
