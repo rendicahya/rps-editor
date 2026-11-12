@@ -38,13 +38,18 @@ Sudah ada:
 - **Periksa** (jumlah temuan diperbarui langsung; klik temuan untuk menuju isiannya, isian pilihan langsung dibuka):
   - identitas penting kosong, SKS 0, kode CPL/CPMK/Sub-CPMK/asesmen/LK kosong atau ganda;
   - CPMK tanpa CPL atau tanpa Sub-CPMK, Sub-CPMK tanpa CPMK induk, CPL yang tidak didukung CPMK;
-  - Sub-CPMK yang tidak dinilai asesmen atau tidak muncul di tabel pertemuan;
+  - Sub-CPMK yang tidak dinilai asesmen (termasuk yang berporsi di asesmen berbobot 0) atau tidak muncul di tabel
+    pertemuan; CPMK dan CPL yang tidak ikut nilai akhir; saran bila satu CPMK menyumbang kurang dari 5% nilai akhir;
   - total bobot asesmen bukan 100%, porsi asesmen terhadap Sub-CPMK tidak berjumlah 1;
   - pertemuan tanpa Sub-CPMK/indikator/materi/waktu, urutan pekan tidak naik, pekan yang terlewat, jumlah pekan
     bukan 16, tidak ada UTS/UAS;
   - waktu pertemuan dibanding SKS (kuliah n×50 menit, praktikum n×170 menit; "2x50 menit" dan "100 menit" terbaca);
   - Lembar Kerja tanpa judul, asesmen, Sub-CPMK, atau deskripsi;
   - uraian CPL/CPMK/Sub-CPMK atau pustaka yang ditulis dua kali, dosen pengelola yang tercantum dua kali.
+  - Tab **Rekap nilai**: pohon CPL › CPMK › Sub-CPMK dengan persentase nilai akhir yang mengukur tiap capaian (bobot
+    asesmen × porsi Sub-CPMK, dijumlahkan ke atas) beserta bilahnya; Sub-CPMK menampilkan jumlah pertemuannya, dan
+    asesmen penyumbangnya saat diarahkan. Capaian 0% ditandai merah; klik baris untuk menuju isiannya. CPMK yang
+    mendukung beberapa CPL dihitung penuh di tiap CPL.
 - **Pengingat tinjauan berkala**: RPS yang tanggal penyusunannya lebih dari 1–5 tahun lalu (dipilih di panel Periksa,
   bawaan 2 tahun; diingat per browser) diberi peringatan "sebaiknya ditinjau ulang". Di Pustaka Daring, RPS itu
   berlencana **Perlu ditinjau** dan bisa didaftar sekaligus lewat **Perlu ditinjau** di bawah pohon folder.

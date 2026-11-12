@@ -1443,7 +1443,7 @@
     onjump={(f) => jumpTo(f.ref)}
   />
   {#if tabMenu}<ContextMenu x={tabMenu.x} y={tabMenu.y} items={tabMenu.items} onclose={() => (tabMenu = null)} />{/if}
-  <CheckPanel bind:open={checkOpen} {issues} onjump={jumpTo} />
+  <CheckPanel bind:open={checkOpen} {issues} doc={app.doc} onjump={jumpTo} />
   <LibraryDialog
     bind:open={libraryOpen}
     bind:tab={libraryTab}

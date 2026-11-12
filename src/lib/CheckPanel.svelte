@@ -1,8 +1,17 @@
 <script>
   import { review, setReviewYears, REVIEW_CHOICES } from './review.svelte.js';
+  import { contributions } from './rekap.js';
+  import { formatAngka } from './model.js';
+  import { plainText } from './richtext.js';
 
-  /** Daftar temuan pemeriksa dokumen; onjump(ref) menuju isian terkait di halaman. */
-  let { open = $bindable(false), issues, onjump } = $props();
+  /** Daftar temuan pemeriksa dokumen dan rekap kontribusi nilai; onjump(ref) menuju isian terkait di halaman. */
+  let { open = $bindable(false), issues, doc, onjump } = $props();
+
+  let tab = $state('issues');
+  const rekap = $derived(open && tab === 'rekap' ? contributions(doc) : null);
+  const pct = (v) => `${formatAngka(v)}%`;
+  const tip = (x) => plainText(x.teks ?? '').replace(/\s+/g, ' ').trim();
+  const fromTip = (n) => (n.from.length ? n.from.map((f) => `${f.kode} ${pct(f.nilai)}`).join(' + ') : 'Tidak dinilai asesmen mana pun');
 
   let showInfo = $state(false);
   const LEVEL = { error: 'Salah', warn: 'Peringatan', info: 'Saran' };
@@ -29,6 +38,45 @@
       <strong>Periksa dokumen</strong>
       <button class="icon" onclick={() => (open = false)} title="Tutup (Esc)">✕</button>
     </div>
+    <div class="tabs" role="tablist">
+      <button role="tab" aria-selected={tab === 'issues'} class:on={tab === 'issues'} onclick={() => (tab = 'issues')}>Temuan ({count('error') + count('warn')})</button>
+      <button role="tab" aria-selected={tab === 'rekap'} class:on={tab === 'rekap'} onclick={() => (tab = 'rekap')}>Rekap nilai</button>
+    </div>
+    {#if rekap}
+      <p class="summary">
+        Persentase nilai akhir yang mengukur tiap capaian: bobot asesmen × porsi Sub-CPMK, dijumlahkan ke CPMK dan CPL.
+        {#if rekap.total !== 100}<strong class="bad">Total bobot asesmen {pct(rekap.total)}, bukan 100%.</strong>{/if}
+      </p>
+      {#snippet line(node, level, ref)}
+        <button class="rk l{level}" class:zero={!node.value} onclick={() => onjump(ref)} title={level === 3 ? `${tip(node.item)}\n${fromTip(node)}` : tip(node.item)}>
+          <span class="k">{node.item.kode || '(tanpa kode)'}</span>
+          {#if level === 3}<span class="pk" title="Jumlah pertemuan yang memuat Sub-CPMK ini">{node.pekan ? `${node.pekan} pertemuan` : 'tanpa pertemuan'}</span>{/if}
+          <span class="bar"><span style="width:{Math.min(100, node.value)}%"></span></span>
+          <span class="v">{pct(node.value)}</span>
+        </button>
+      {/snippet}
+      {#snippet cpmkTree(m)}
+        {@render line(m, 2, `cpmk:${m.item.id}:kode`)}
+        {#each m.children as s (s.item.id)}{@render line(s, 3, `subCpmk:${s.item.id}:kode`)}{/each}
+      {/snippet}
+      <div class="rekap">
+        {#each rekap.tree as c (c.item.id)}
+          {@render line(c, 1, `cpl:${c.item.id}:kode`)}
+          {#each c.children as m (m.item.id)}{@render cpmkTree(m)}{/each}
+          {#if !c.children.length}<p class="none">Tidak didukung CPMK mana pun.</p>{/if}
+        {/each}
+        {#if rekap.orphanCpmk.length}
+          <p class="group">CPMK tanpa CPL</p>
+          {#each rekap.orphanCpmk as m (m.item.id)}{@render cpmkTree(m)}{/each}
+        {/if}
+        {#if rekap.orphanSub.length}
+          <p class="group">Sub-CPMK tanpa CPMK induk</p>
+          {#each rekap.orphanSub as s (s.item.id)}{@render line(s, 3, `subCpmk:${s.item.id}:kode`)}{/each}
+        {/if}
+        {#if !rekap.tree.length && !rekap.orphanCpmk.length && !rekap.orphanSub.length}<p class="none">Belum ada CPL, CPMK, maupun Sub-CPMK.</p>{/if}
+      </div>
+      <p class="note">CPMK yang mendukung beberapa CPL dihitung penuh di tiap CPL. Arahkan ke Sub-CPMK untuk melihat asesmen penyumbangnya.</p>
+    {:else}
     <p class="summary">
       {#if !count('error') && !count('warn')}
         Tidak ada kesalahan maupun isian penting yang kosong.
@@ -56,6 +104,7 @@
           </li>
         {/each}
       </ul>
+    {/if}
     {/if}
   </div>
 {/if}
@@ -153,5 +202,119 @@
   .msg {
     font-size: 0.82rem;
     overflow-wrap: anywhere;
+  }
+  .tabs {
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .tabs button {
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 0.8rem;
+    padding: 0.3rem 0.5rem;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    cursor: pointer;
+  }
+  .tabs button.on {
+    color: var(--text);
+    font-weight: 600;
+    border-bottom-color: var(--accent);
+  }
+  .bad {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--danger, #b42318);
+    font-weight: 600;
+  }
+  .rekap {
+    overflow: auto;
+    display: grid;
+    gap: 1px;
+  }
+  .rk {
+    display: grid;
+    grid-template-columns: minmax(6.5rem, auto) 1fr 3.4rem;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.2rem 0.4rem;
+    border: 0;
+    border-radius: 5px;
+    background: none;
+    color: var(--text);
+    font: inherit;
+    font-size: 0.8rem;
+    text-align: left;
+    cursor: pointer;
+  }
+  .rk:hover {
+    background: var(--surface-2);
+  }
+  .rk.l1 {
+    margin-top: 0.35rem;
+    font-weight: 700;
+  }
+  .rk.l2 {
+    padding-left: 1rem;
+    font-weight: 600;
+  }
+  .rk.l3 {
+    padding-left: 1.9rem;
+    grid-template-columns: minmax(5.6rem, auto) auto 1fr 3.4rem;
+  }
+  .k {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pk {
+    font-size: 0.7rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .bar {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--surface-2);
+    box-shadow: inset 0 0 0 1px var(--line);
+    overflow: hidden;
+  }
+  .bar span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+  }
+  .rk.l3 .bar span {
+    opacity: 0.7;
+  }
+  .v {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .rk.zero .v,
+  .rk.zero .k {
+    color: var(--danger, #b42318);
+  }
+  .group {
+    margin: 0.5rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--muted);
+  }
+  .none,
+  .note {
+    margin: 0;
+    padding-left: 1rem;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+  .note {
+    padding: 0;
   }
 </style>

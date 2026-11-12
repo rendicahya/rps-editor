@@ -2,6 +2,7 @@
 // `ref` = data-field isian terkait di halaman (lihat layout.js); 'pk:' = isian pilihan, panelnya dibuka.
 import { plainText } from './richtext.js';
 import { formatAngka, formatTanggal, todayIso } from './model.js';
+import { contributions } from './rekap.js';
 
 const blank = (s) => !plainText(s ?? '').trim();
 const round = (n) => Math.round(n * 1000) / 1000;
@@ -85,21 +86,32 @@ export function checkDocument(doc, { reviewYears = 0, today = todayIso() } = {})
   if (!doc.cpl.length) add('error', 'Belum ada CPL prodi.', null);
   if (!doc.cpmk.length) add('error', 'Belum ada CPMK.', null);
   if (!doc.subCpmk.length) add('error', 'Belum ada Sub-CPMK.', null);
+  // Kontribusi nilai (lihat rekap.js): capaian yang tidak ikut nilai akhir, atau porsinya sangat kecil.
+  const share = contributions(doc);
+  const pct = (v) => `${formatAngka(v)}%`;
   for (const c of doc.cpl) {
     if (blank(c.teks)) add('warn', `Uraian ${name(c, 'CPL')} masih kosong.`, `cpl:${c.id}:teks`);
-    if (!doc.cpmk.some((m) => m.cpl.includes(c.id))) add('warn', `${name(c, 'CPL')} tidak didukung CPMK mana pun.`, null);
+    if (!doc.cpmk.some((m) => m.cpl.includes(c.id))) add('warn', `${name(c, 'CPL')} tidak didukung CPMK mana pun.`, `cpl:${c.id}:kode`);
+    else if (share.total > 0 && !share.cpl.get(c.id)) add('warn', `${name(c, 'CPL')} tidak dinilai: CPMK pendukungnya tidak mendapat bobot asesmen.`, `cpl:${c.id}:kode`);
   }
   for (const m of doc.cpmk) {
     if (blank(m.teks)) add('warn', `Uraian ${name(m, 'CPMK')} masih kosong.`, `cpmk:${m.id}:teks`);
     if (!m.cpl.length) add('error', `${name(m, 'CPMK')} belum mendukung CPL mana pun.`, `pk:cpmk:${m.id}`);
+    const v = share.cpmk.get(m.id);
     if (!doc.subCpmk.some((s) => s.cpmk === m.id)) add('warn', `${name(m, 'CPMK')} belum punya Sub-CPMK.`, `cpmk:${m.id}:kode`);
+    else if (share.total > 0 && !v) add('warn', `${name(m, 'CPMK')} tidak dinilai: Sub-CPMK-nya tidak mendapat bobot asesmen.`, `cpmk:${m.id}:kode`);
+    else if (share.total > 0 && v < 5) add('info', `${name(m, 'CPMK')} hanya menyumbang ${pct(v)} nilai akhir.`, `cpmk:${m.id}:kode`);
   }
   for (const s of doc.subCpmk) {
     const n = name(s, 'Sub-CPMK');
     if (blank(s.teks)) add('warn', `Uraian ${n} masih kosong.`, `subCpmk:${s.id}:teks`);
     if (!s.cpmk) add('error', `${n} belum punya CPMK induk.`, `pk:sub:${s.id}`);
-    if (!doc.asesmen.some((a) => (a.porsi[s.id] ?? 0) > 0)) add('warn', `${n} belum dinilai asesmen mana pun (matriks B).`, null);
-    if (!doc.pertemuan.some((p) => p.subCpmk.includes(s.id))) add('warn', `${n} tidak muncul di tabel pertemuan.`, null);
+    if (!share.sub.get(s.id)) {
+      const porsi = doc.asesmen.find((a) => (a.porsi[s.id] ?? 0) > 0);
+      if (porsi) add('warn', `${n} punya porsi di ${name(porsi, 'asesmen')}, tetapi bobot asesmennya 0 sehingga tidak ikut nilai akhir.`, `asesmen:${porsi.id}:bobot`);
+      else add('warn', `${n} belum dinilai asesmen mana pun (matriks B).`, `subCpmk:${s.id}:kode`);
+    }
+    if (!doc.pertemuan.some((p) => p.subCpmk.includes(s.id))) add('warn', `${n} tidak muncul di tabel pertemuan.`, `subCpmk:${s.id}:kode`);
   }
 
   // Asesmen: bobot total 100% dan porsi tiap asesmen berjumlah 1.
