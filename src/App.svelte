@@ -7,7 +7,7 @@
   import AiDialog from './lib/AiDialog.svelte';
   import { sampleDocument } from './lib/sample.js';
   import { layoutDocument } from './lib/layout.js';
-  import { exportPdf, rpsFromPdf, PDF_PROTECT } from './lib/pdf.js';
+  import { exportPdf, exportPdfBook, rpsFromPdf, PDF_PROTECT } from './lib/pdf.js';
   import { rpsFromDocx } from './lib/docxData.js';
   import { fontSource, useSystemCalibri, useCalibriFiles } from './lib/fonts.js';
   import { saveJson, openJsonFile, slug, rpsName, downloadBlob } from './lib/files.js';
@@ -18,6 +18,7 @@
   import CheckPanel from './lib/CheckPanel.svelte';
   import ContextMenu from './lib/ContextMenu.svelte';
   import { checkDocument } from './lib/validate.js';
+  import { review } from './lib/review.svelte.js';
   import { connectHistory } from './lib/history.js';
   import LibraryDialog from './lib/LibraryDialog.svelte';
   import { saveDoc, isBlank, getEntry } from './lib/library.js';
@@ -111,7 +112,7 @@
     if (checkOpen) findOpen = false;
     if (empty) checkOpen = false;
   });
-  const issues = $derived(empty ? [] : checkDocument(app.doc));
+  const issues = $derived(empty ? [] : checkDocument(app.doc, { reviewYears: review.years }));
   const issueErrors = $derived(issues.filter((i) => i.level === 'error').length);
   const issueWarns = $derived(issues.filter((i) => i.level === 'warn').length);
 
@@ -800,6 +801,33 @@
     };
   }
 
+  /** Isi tab yang membuka RPS daring `id` (termasuk perubahan yang belum tersimpan), atau null. */
+  function facultyTabJson(id) {
+    const t = tabs.list.find((x) => x.remote?.id === id);
+    return t ? tabJson(t.id) : null;
+  }
+
+  /**
+   * Versi lama dari Riwayat dimuat ke tab yang membuka RPS `id` sebagai satu langkah suntingan: bisa di-Undo, dan baru
+   * menjadi isi terkini di Pustaka Daring setelah disimpan. Nama mata kuliah tidak ikut mundur, sama seperti Kembalikan biasa.
+   */
+  function restoreIntoTab(id, json) {
+    const t = tabs.list.find((x) => x.remote?.id === id);
+    if (!t) return;
+    let doc;
+    try {
+      doc = parseDocumentText(json);
+    } catch {
+      return ui.alert('Versi ini rusak dan tidak bisa dimuat.');
+    }
+    switchTab(t.id);
+    checkpoint();
+    doc.identitas.mataKuliah = app.doc.identitas.mataKuliah;
+    app.doc = doc;
+    checkpoint();
+    notify('Versi lama dimuat. Simpan ke Pustaka Daring untuk menerapkannya, atau Urungkan (Ctrl+Z).');
+  }
+
   /** Tab tertaut ke `remote`, dan isi yang baru tersimpan tidak lagi dianggap perubahan. */
   function linkTab(tab, doc, remote) {
     const json = JSON.stringify(doc);
@@ -880,11 +908,14 @@
   let pdfWatermark = $state(getPref('pdfWatermark') ?? '');
   let pdfBusy = $state(false);
   let pdfRun = 0;
+  // PDF gabungan beberapa RPS: { docs, title }; null = PDF dari dokumen aktif.
+  let pdfBook = $state(null);
   async function buildPdf() {
     const run = ++pdfRun;
     pdfBusy = true;
     try {
-      const out = await exportPdf(app.doc, { protect: pdfProtect, watermark: pdfWatermark });
+      const opts = { protect: pdfProtect, watermark: pdfWatermark };
+      const out = pdfBook ? await exportPdfBook(pdfBook.docs, pdfBook.title, opts) : await exportPdf(app.doc, opts);
       if (run === pdfRun) pdfDoc = out; // pilihan diganti lagi selagi dibuat: hasil lama dibuang
     } catch (e) {
       ui.alert('Gagal membuat PDF: ' + e.message);
@@ -894,8 +925,39 @@
   }
   function pdf() {
     if (pdfBusy) return;
+    pdfBook = null;
     pdfSaved = fileMark();
     buildPdf();
+  }
+
+  /** Menggabungkan beberapa RPS ({ json, title }) menjadi satu PDF berdaftar isi, lalu menampilkan pratinjaunya. */
+  function makeBook(items, title) {
+    if (pdfBusy) return;
+    const docs = [];
+    const bad = [];
+    for (const it of items) {
+      try {
+        docs.push(parseDocumentText(it.json));
+      } catch {
+        bad.push(it.title || 'RPS tanpa judul');
+      }
+    }
+    if (!docs.length) return ui.alert('Tidak ada RPS yang bisa digabung.');
+    if (bad.length) notify(`${bad.length} RPS rusak dilewati: ${bad.join(', ')}`);
+    pdfBook = { docs, title };
+    buildPdf();
+  }
+
+  /** Semua tab yang terbuka digabung menjadi satu PDF, urut seperti tabnya. */
+  async function bookFromTabs() {
+    const items = tabs.list.map((t) => ({ json: tabJson(t.id), title: tabTitle(t) }));
+    const raw = await ui.prompt(`${items.length} RPS dari tab yang terbuka digabung menjadi satu PDF, diawali halaman daftar isi. Judul halaman depan:`, 'Kumpulan RPS', {
+      title: 'Gabung tab jadi satu PDF',
+      ok: 'Buat PDF',
+      maxlength: 200
+    });
+    const title = raw?.trim().replace(/\s+/g, ' ');
+    if (title) makeBook(items, title);
   }
   /** Pilihan di dialog pratinjau berubah: diingat, lalu PDF dibuat ulang. */
   function setPdfOptions({ protect = pdfProtect, watermark = pdfWatermark }) {
@@ -1146,6 +1208,11 @@
             <button role="menuitem" onclick={() => ((exportOpen = false), exportDocxFile())}>
               <strong>Word (.docx)</strong><small>Tabel Word yang bisa diedit; bisa dibuka lagi di sini</small>
             </button>
+            {#if tabs.list.length > 1}
+              <button role="menuitem" onclick={() => ((exportOpen = false), bookFromTabs())}>
+                <strong>PDF gabungan semua tab…</strong><small>{tabs.list.length} RPS dalam satu PDF berdaftar isi</small>
+              </button>
+            {/if}
             <button role="menuitem" class="sep" onclick={() => ((exportOpen = false), (metaOpen = true))}>
               <strong>Properti dokumen…</strong><small>Judul, penulis, subjek, dan kata kunci berkas</small>
             </button>
@@ -1292,14 +1359,15 @@
 
   <PdfPreviewDialog
     bind:pdf={pdfDoc}
-    ondownload={() => pdfSaved?.()}
+    ondownload={() => !pdfBook && pdfSaved?.()}
     protect={pdfProtect}
     watermark={pdfWatermark}
     busy={pdfBusy}
     onoptions={setPdfOptions}
-    onmeta={() => (metaOpen = true)}
-    {pages}
-    filename={`RPS-${slug(docTitle(app.doc))}.pdf`}
+    onmeta={pdfBook ? null : () => (metaOpen = true)}
+    title={pdfBook ? `Pratinjau PDF gabungan · ${pdfBook.docs.length} RPS` : 'Pratinjau PDF'}
+    pages={pdfBook ? [] : pages}
+    filename={pdfBook ? `${slug(pdfBook.title) || 'Kumpulan-RPS'}.pdf` : `RPS-${slug(docTitle(app.doc))}.pdf`}
     fontNote={docFont === 'calibri' ? '' : 'Calibri belum tersedia, PDF memakai Carlito (ukuran identik)'}
   />
   <FindPanel
@@ -1337,7 +1405,10 @@
       onloaded: onFacultyLoaded,
       onrenamed: onFacultyRenamed,
       onbinned: onFacultyBinned,
-      onnotify: notify
+      onnotify: notify,
+      tabjson: facultyTabJson,
+      onrestoretab: restoreIntoTab,
+      onbook: (sops, title) => makeBook(sops.map((s) => ({ json: s.json, title: s.title })), title)
     }}
   />
   <AiDialog bind:open={aiOpen} docKey={tabs.active} onpaste={loadPasted} />

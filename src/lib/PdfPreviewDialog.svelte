@@ -7,7 +7,7 @@
    * pdf: objek jsPDF hasil exportPdf; pages: tata letak (cadangan bila browser tak bisa menampilkan PDF).
    * protect, watermark: pilihan saat ini; onoptions({ protect?, watermark? }) membuat ulang PDF.
    */
-  let { pdf = $bindable(null), pages, filename, fontNote = '', ondownload, protect = 'none', watermark = '', busy = false, onoptions, onmeta } = $props();
+  let { pdf = $bindable(null), pages, filename, fontNote = '', ondownload, protect = 'none', watermark = '', busy = false, onoptions, onmeta, title = 'Pratinjau PDF' } = $props();
 
   // Watermark: '' (tanpa), salah satu WATERMARKS, atau 'custom' dengan teks bebas.
   let wmChoice = $state('');
@@ -29,7 +29,7 @@
   const applyCustom = () => wmText.trim() !== watermark && onoptions?.({ watermark: wmText });
 
   const PROTECT = [
-    ['none', 'Bisa disalin', 'Teks bisa diseleksi dan disalin. PDF bisa dibuka lagi di RPS Editor untuk diedit.'],
+    ['none', 'Bisa disalin', 'Teks bisa diseleksi dan disalin. PDF satu RPS bisa dibuka lagi di RPS Editor untuk diedit.'],
     ['lock', 'Dikunci', 'Teks tetap tajam, tetapi PDF hanya boleh dicetak: salin dan ubah dilarang. Dipatuhi Acrobat, Chrome, dan Edge; sebagian penampil (mis. Firefox) mengabaikannya. Tidak bisa dibuka lagi di RPS Editor.'],
     ['image', 'Gambar', 'Setiap halaman menjadi gambar sehingga teks sama sekali tidak bisa diseleksi di penampil mana pun. Berkas lebih besar dan tidak bisa dibuka lagi di RPS Editor.']
   ];
@@ -81,7 +81,7 @@
 <dialog bind:this={dialog} class="dialog" use:dismiss onclose={() => (pdf = null)}>
   <header>
     <div>
-      <h2>Pratinjau PDF</h2>
+      <h2>{title}</h2>
       <small>{size}{fontNote ? ' · ' + fontNote : ''}</small>
     </div>
     <div class="actions">

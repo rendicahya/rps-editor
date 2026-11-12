@@ -40,7 +40,11 @@ Sudah ada:
   - pertemuan tanpa Sub-CPMK/indikator/materi/waktu, urutan pekan tidak naik, pekan yang terlewat, jumlah pekan
     bukan 16, tidak ada UTS/UAS;
   - waktu pertemuan dibanding SKS (kuliah n×50 menit, praktikum n×170 menit; "2x50 menit" dan "100 menit" terbaca);
-  - Lembar Kerja tanpa judul, asesmen, Sub-CPMK, atau deskripsi.
+  - Lembar Kerja tanpa judul, asesmen, Sub-CPMK, atau deskripsi;
+  - uraian CPL/CPMK/Sub-CPMK atau pustaka yang ditulis dua kali, dosen pengelola yang tercantum dua kali.
+- **Pengingat tinjauan berkala**: RPS yang tanggal penyusunannya lebih dari 1–5 tahun lalu (dipilih di panel Periksa,
+  bawaan 2 tahun; diingat per browser) diberi peringatan "sebaiknya ditinjau ulang". Di Pustaka Daring, RPS itu
+  berlencana **Perlu ditinjau** dan bisa didaftar sekaligus lewat **Perlu ditinjau** di bawah pohon folder.
 
 - **Pustaka Daring**: folder, hak akses per anggota/grup (plus pilihan akses umum: Private, semua anggota bisa
   melihat, atau semua anggota bisa mengedit), riwayat, recycle bin, dan keterangan "sedang diedit".
@@ -50,6 +54,12 @@ Sudah ada:
   - **Riwayat lama bisa dihapus** oleh pemilik RPS dan admin: per versi, atau sekaligus lewat **Hapus riwayat lama…**
     dengan menyisakan sejumlah versi terbaru (0 = seluruh riwayat; isi saat ini tetap utuh). Ruangnya dikembalikan ke
     kuota pustaka. Tidak bisa dibatalkan.
+  - **Bandingkan versi** (Riwayat › Bandingkan versi…, atau ikon bandingkan pada satu versi): dua versi mana pun, isi
+    terkini, atau isi tab yang belum disimpan dibandingkan. Yang ditampilkan: identitas, CPL, CPMK, Sub-CPMK, asesmen,
+    pertemuan, pustaka, dan Lembar Kerja (ditambah, dihapus, diubah, atau dipindah) dengan perbedaan per kata.
+  - **Kembalikan versi saat RPS terbuka di tab**: isi versi lama dimuat ke tab itu sebagai perubahan biasa (bisa
+    di-Undo) dan baru menjadi isi terkini setelah disimpan. Bila RPS tidak terbuka, versi lama langsung menjadi isi
+    terkini.
   - **Unggah banyak sekaligus**: seret berkas `.rps` atau ZIP berisi `.rps` ke daftar atau ke
     folder di pohon (atau tombol unggah berkas / menu klik kanan), maksimal 500 berkas. Subfolder di dalam ZIP dibuat
     ulang; folder bernama sama yang milik Anda dipakai. PDF dan DOCX hasil ekspor RPS Editor juga diterima. Berkas yang tidak
@@ -74,6 +84,10 @@ Sudah ada:
   dibuka lagi di editor.
   Pilihan **Watermark** menambahkan teks miring dan samar di tengah setiap halaman: DRAFT, SALINAN TERKENDALI,
   SALINAN TIDAK TERKENDALI, RAHASIA, CONTOH, atau teks lain (maks. 60 karakter). Watermark hanya ada di PDF.
+- **PDF gabungan (kumpulan RPS)**: beberapa RPS digabung menjadi satu PDF, diawali halaman daftar isi (kode, mata
+  kuliah, prodi, dan halaman tiap RPS; klik untuk melompat) dan bookmark per RPS. Dari Pustaka Daring: pilih RPS atau
+  folder lalu **Gabung PDF** (isi folder dan subfoldernya ikut), atau klik kanan folder › **Gabung isinya jadi satu
+  PDF…**. Dari editor: menu Ekspor › **PDF gabungan semua tab…**. Pilihan Isi PDF dan Watermark berlaku juga di sini.
 - **Ekspor Word (.docx)** (menu Ekspor): tabel Word biasa yang bisa diedit, dengan bagian dan orientasi sama seperti
   PDF (sampul potret, identitas/matriks/tabel pertemuan lanskap, Lembar Kerja potret). Kepala tabel pertemuan diulang
   di setiap halaman, dan baris panjang dibiarkan terbelah oleh Word, sehingga letak pergantian halaman bisa sedikit

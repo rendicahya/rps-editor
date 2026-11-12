@@ -16,7 +16,8 @@ const orientation = (page) => (page.w > page.h ? 'landscape' : 'portrait');
  */
 export const PDF_PROTECT = ['none', 'lock', 'image'];
 
-function newPdf(doc, first, protect) {
+/** `meta`: { title, author, subject, keywords } untuk properti PDF; `first`: halaman pertama (menentukan orientasi). */
+function newPdf(meta, first, protect) {
   const pdf = new jsPDF({
     unit: 'mm',
     format: 'a4',
@@ -25,10 +26,42 @@ function newPdf(doc, first, protect) {
     // Kata sandi pemilik acak: tidak ada yang bisa membuka PDF dengan hak penuh untuk mencabut larangan.
     ...(protect !== 'none' && { encryption: { userPassword: '', ownerPassword: randomPassword(), userPermissions: ['print'] } })
   });
-  pdf.setProperties({ ...docMeta(doc), creator: 'RPS Editor' });
+  pdf.setProperties({ ...meta, creator: 'RPS Editor' });
   return pdf;
 }
 
+/** Penggambar halaman ke `pdf` sesuai mode perlindungan; halaman pertama bawaan jsPDF dipakai lebih dulu. */
+async function pageWriter(pdf, protect, wm, vectorFonts) {
+  let used = false;
+  const images = new Map();
+  const img = protect === 'image' ? await import('./pageImage.js') : null;
+  if (img) await img.loadDocFonts();
+  pdf.setLineJoin('miter');
+  if (!img || vectorFonts) registerFonts(pdf);
+  /** Halaman baru seukuran `page` ({ w, h }); nomor halamannya dikembalikan. */
+  const next = (page) => {
+    if (used) pdf.addPage('a4', orientation(page));
+    used = true;
+    return pdf.getNumberOfPages();
+  };
+  return {
+    next,
+    /** Menambah satu halaman tata letak (layout.js). */
+    async page(page) {
+      next(page);
+      if (img) {
+        const canvas = await img.renderPage(page, images, IMAGE_DPI);
+        if (wm) paintWatermark(canvas, page, wm, img.FONT);
+        pdf.addImage(canvas, 'PNG', 0, 0, page.w, page.h, undefined, 'FAST');
+      } else {
+        for (const it of page.items) drawItem(pdf, it);
+        if (wm) drawWatermark(pdf, page, wm);
+      }
+    }
+  };
+}
+
+const cleanWatermark = (w) => String(w ?? '').replace(/\s+/g, ' ').trim();
 function randomPassword() {
   const a = new Uint8Array(24);
   crypto.getRandomValues(a);
@@ -89,31 +122,141 @@ function paintWatermark(canvas, page, text, font) {
 /** opts: { protect: lihat PDF_PROTECT, watermark: teks (kosong = tanpa watermark) }. */
 export async function exportPdf(doc, { protect = 'none', watermark = '' } = {}) {
   const pages = layoutDocument(doc);
-  const pdf = newPdf(doc, pages[0], protect);
-  const wm = watermark.replace(/\s+/g, ' ').trim();
-  if (protect === 'image') {
-    const { renderPage, loadDocFonts, FONT } = await import('./pageImage.js');
-    await loadDocFonts();
-    const images = new Map();
-    for (let i = 0; i < pages.length; i++) {
-      if (i > 0) pdf.addPage('a4', orientation(pages[i]));
-      const canvas = await renderPage(pages[i], images, IMAGE_DPI);
-      if (wm) paintWatermark(canvas, pages[i], wm, FONT);
-      pdf.addImage(canvas, 'PNG', 0, 0, pages[i].w, pages[i].h, undefined, 'FAST');
-    }
-    return pdf;
-  }
-  pdf.setLineJoin('miter');
-  registerFonts(pdf);
-  pages.forEach((page, i) => {
-    if (i > 0) pdf.addPage('a4', orientation(page));
-    for (const it of page.items) drawItem(pdf, it);
-    if (wm) drawWatermark(pdf, page, wm);
-  });
+  const pdf = newPdf(docMeta(doc), pages[0], protect);
+  const w = await pageWriter(pdf, protect, cleanWatermark(watermark), false);
+  for (const page of pages) await w.page(page);
   if (protect === 'none') attachRps(pdf, doc);
   return pdf;
 }
 
+// ---- Kumpulan RPS: beberapa RPS dalam satu PDF, diawali daftar isi (halaman potret) ----
+const TOC_PAGE = { w: 210, h: 297 };
+const TOC = { x: 20, right: 190, top: 20, bottom: 277, cols: [10, 32], size: 10 };
+
+/**
+ * Menggabungkan `docs` (dokumen RPS, berurutan) menjadi satu PDF dengan halaman daftar isi yang bisa diklik dan
+ * bookmark per RPS. `title`: judul kumpulan. opts sama dengan exportPdf; data RPS tidak disisipkan.
+ */
+export async function exportPdfBook(docs, title, { protect = 'none', watermark = '' } = {}) {
+  const first = docs[0] ? docMeta(docs[0]) : {};
+  const pdf = newPdf({ title, author: first.author ?? '', subject: `Kumpulan ${docs.length} Rencana Pembelajaran Semester`, keywords: '' }, TOC_PAGE, protect);
+  const wm = cleanWatermark(watermark);
+  const w = await pageWriter(pdf, protect, wm, true);
+  const layouts = docs.map((d) => layoutDocument(d));
+  const font = pdfFont();
+  const nameOf = (d) => docTitle(d) || 'RPS tanpa judul';
+
+  // Baris daftar isi: tinggi tiap baris mengikuti jumlah baris nama mata kuliah.
+  const lh = TOC.size * PT * 1.3;
+  const nameX = TOC.x + TOC.cols[0] + TOC.cols[1];
+  const nameW = TOC.right - 18 - nameX;
+  pdf.setFont(font, 'normal');
+  pdf.setFontSize(TOC.size);
+  const rows = docs.map((d, i) => {
+    const prodi = d.identitas.prodi?.trim();
+    const name = pdf.splitTextToSize(nameOf(d), nameW);
+    const sub = prodi ? pdf.splitTextToSize(prodi, nameW) : [];
+    const kode = pdf.splitTextToSize(d.identitas.kode?.trim() || '—', TOC.cols[1] - 3);
+    return { i, name, sub, kode, h: Math.max(name.length + sub.length, kode.length) * lh + 2.6 };
+  });
+  // Pembagian baris ke halaman daftar isi: halaman pertama memuat judul, berikutnya hanya kepala tabel.
+  const tocPages = [[]];
+  let y = 62;
+  for (const r of rows) {
+    if (y + r.h > TOC.bottom && tocPages.at(-1).length) {
+      tocPages.push([]);
+      y = 38;
+    }
+    tocPages.at(-1).push(r);
+    y += r.h;
+  }
+  const starts = [];
+  let p = tocPages.length + 1;
+  for (const l of layouts) {
+    starts.push(p);
+    p += l.length;
+  }
+  const total = p - 1;
+
+  const tableHead = (y0) => {
+    pdf.setFont(font, 'bold');
+    pdf.setFontSize(TOC.size);
+    pdf.setTextColor('#000000');
+    pdf.text('No', TOC.x, y0);
+    pdf.text('Kode', TOC.x + TOC.cols[0], y0);
+    pdf.text('Mata kuliah', nameX, y0);
+    pdf.text('Halaman', TOC.right, y0, { align: 'right' });
+    pdf.setDrawColor('#000000');
+    pdf.setLineWidth(0.3);
+    pdf.line(TOC.x, y0 + 2, TOC.right, y0 + 2);
+    return y0 + 2;
+  };
+  tocPages.forEach((list, k) => {
+    w.next(TOC_PAGE);
+    let y0;
+    if (k === 0) {
+      pdf.setFont(font, 'bold');
+      pdf.setFontSize(18);
+      pdf.setTextColor('#000000');
+      const heading = pdf.splitTextToSize(title, TOC.right - TOC.x);
+      pdf.text(heading.slice(0, 2), TOC_PAGE.w / 2, 30, { align: 'center' });
+      pdf.setFont(font, 'normal');
+      pdf.setFontSize(10);
+      pdf.setTextColor('#555555');
+      pdf.text(`${docs.length} RPS · ${total} halaman`, TOC_PAGE.w / 2, 30 + Math.min(2, heading.length) * 18 * PT * 1.2 + 1, { align: 'center' });
+      pdf.setFont(font, 'bold');
+      pdf.setFontSize(12);
+      pdf.setTextColor('#000000');
+      pdf.text('DAFTAR ISI', TOC.x, 54);
+      y0 = tableHead(60) + 0.4;
+    } else {
+      pdf.setFont(font, 'bold');
+      pdf.setFontSize(12);
+      pdf.setTextColor('#000000');
+      pdf.text('DAFTAR ISI (lanjutan)', TOC.x, TOC.top + 6);
+      y0 = tableHead(34) + 0.4;
+    }
+    for (const r of list) {
+      const base = y0 + 1.3 + TOC.size * PT * 0.85;
+      pdf.setFont(font, 'normal');
+      pdf.setFontSize(TOC.size);
+      pdf.setTextColor('#000000');
+      pdf.text(`${r.i + 1}.`, TOC.x, base);
+      pdf.text(r.kode, TOC.x + TOC.cols[0], base, { lineHeightFactor: 1.3 });
+      pdf.setTextColor('#1d4ed8');
+      pdf.text(r.name, nameX, base, { lineHeightFactor: 1.3 });
+      if (r.sub.length) {
+        pdf.setTextColor('#555555');
+        pdf.text(r.sub, nameX, base + r.name.length * lh, { lineHeightFactor: 1.3 });
+      }
+      pdf.setTextColor('#000000');
+      pdf.text(String(starts[r.i]), TOC.right, base, { align: 'right' });
+      pdf.link(TOC.x, y0, TOC.right - TOC.x, r.h, { pageNumber: starts[r.i] });
+      y0 += r.h;
+      pdf.setDrawColor('#cccccc');
+      pdf.setLineWidth(0.15);
+      pdf.line(TOC.x, y0, TOC.right, y0);
+    }
+    if (wm) drawWatermark(pdf, TOC_PAGE, wm);
+  });
+
+  for (const l of layouts) for (const page of l) await w.page(page);
+
+  // Plugin outline jsPDF menulis judul bookmark tanpa enkripsi, sehingga rusak pada PDF terkunci; judul dienkripsi di sini.
+  const outline = pdf.outline;
+  const objStart = outline.objStart;
+  let node = null;
+  outline.objStart = function (n) {
+    node = n;
+    return objStart.call(this, n);
+  };
+  // CR/LF ikut di-escape: akhir baris mentah dalam string PDF dibaca sebagai LF sehingga hasil dekripsi rusak.
+  outline.makeString = (val) =>
+    `(${pdf.internal.pdfEscape(pdf.internal.getEncryptor(node.id)(val)).replace(/\r/g, '\\r').replace(/\n/g, '\\n')})`;
+  pdf.outline.add(null, 'Daftar Isi', { pageNumber: 1 });
+  docs.forEach((d, i) => pdf.outline.add(null, `${i + 1}. ${nameOf(d)}`, { pageNumber: starts[i] }));
+  return pdf;
+}
 // Data RPS disisipkan sebagai lampiran PDF (embedded file, dikompres Flate) agar PDF ini bisa dibuka & diedit lagi.
 // Penanda /RPSEditor pada kamus stream dipakai saat membaca kembali (lihat rpsFromPdf).
 function attachRps(pdf, doc) {

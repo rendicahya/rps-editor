@@ -1,10 +1,12 @@
 // Pemeriksa dokumen RPS: daftar temuan { level: 'error' | 'warn' | 'info', msg, ref }.
 // `ref` = data-field isian terkait di halaman (lihat layout.js); 'pk:' = isian pilihan, panelnya dibuka.
 import { plainText } from './richtext.js';
-import { formatAngka } from './model.js';
+import { formatAngka, formatTanggal, todayIso } from './model.js';
 
 const blank = (s) => !plainText(s ?? '').trim();
 const round = (n) => Math.round(n * 1000) / 1000;
+/** Kunci pembanding teks: tanpa beda huruf besar/kecil, tanda baca, dan spasi ganda. */
+const textKey = (s) => plainText(String(s ?? '')).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 
 /** Menit dari isian waktu seperti "2x50 menit", "1 x 170 menit", "100 menit"; null bila tidak terbaca. */
 export function minutes(waktu) {
@@ -15,7 +17,11 @@ export function minutes(waktu) {
   return m ? +m[1] : null;
 }
 
-export function checkDocument(doc) {
+/**
+ * opts.reviewYears: RPS yang tanggal penyusunannya lebih lama dari ini diberi peringatan agar ditinjau ulang
+ * (0 = tanpa pemeriksaan ini).
+ */
+export function checkDocument(doc, { reviewYears = 0, today = todayIso() } = {}) {
   const out = [];
   const add = (level, msg, ref = null) => out.push({ level, msg, ref });
   const id = doc.identitas;
@@ -30,6 +36,33 @@ export function checkDocument(doc) {
   }
   if (!id.dosenPengelola.some((d) => d.trim())) add('warn', 'Dosen pengelola mata kuliah belum diisi.', 'id:dosenPengelola:0');
   if (!id.sksTeori && !id.sksPraktikum) add('error', 'Bobot SKS masih 0.', 'pk:sks');
+  const since = /^\d{4}-\d{2}-\d{2}$/.test(id.tglPenyusunan) ? id.tglPenyusunan : '';
+  if (reviewYears && since && `${Number(since.slice(0, 4)) + reviewYears}${since.slice(4)}` <= today) {
+    add('warn', `RPS disusun ${formatTanggal(since)}, sudah lebih dari ${reviewYears} tahun lalu: sebaiknya ditinjau ulang, lalu perbarui tanggal penyusunan.`, 'id:tglPenyusunan');
+  }
+  const dosen = new Set();
+  id.dosenPengelola.forEach((d, i) => {
+    const k = textKey(d);
+    if (k && dosen.has(k)) add('warn', `Dosen pengelola "${d.trim()}" ditulis dua kali.`, `id:dosenPengelola:${i}`);
+    dosen.add(k);
+  });
+
+  // Uraian yang ditulis dua kali (mis. tersalin) di CPL, CPMK, Sub-CPMK, dan pustaka.
+  for (const [list, what, ref] of [
+    ['cpl', 'CPL', (x) => `cpl:${x.id}:teks`], ['cpmk', 'CPMK', (x) => `cpmk:${x.id}:teks`], ['subCpmk', 'Sub-CPMK', (x) => `subCpmk:${x.id}:teks`],
+    ['pustaka', 'pustaka', (x) => `pustaka:${x.id}:teks`]
+  ]) {
+    const seen = new Map();
+    for (const x of doc[list]) {
+      const k = textKey(x.teks);
+      if (!k) continue;
+      const twin = seen.get(k);
+      if (twin) {
+        const who = list === 'pustaka' ? 'Ada pustaka yang' : `Uraian ${name(x, what)}`;
+        add('warn', `${who} sama dengan ${list === 'pustaka' ? 'pustaka lain' : name(twin, what)}${list === 'pustaka' ? ' (ditulis dua kali)' : ''}.`, ref(x));
+      } else seen.set(k, x);
+    }
+  }
 
   // Kode ganda di tiap daftar
   for (const [list, what, ref] of [

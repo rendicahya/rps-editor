@@ -1,4 +1,6 @@
 <script>
+  import { review, setReviewYears, REVIEW_CHOICES } from './review.svelte.js';
+
   /** Daftar temuan pemeriksa dokumen; onjump(ref) menuju isian terkait di halaman. */
   let { open = $bindable(false), issues, onjump } = $props();
 
@@ -34,7 +36,15 @@
         {count('error')} salah · {count('warn')} peringatan
       {/if}
     </p>
-    <label class="check-row"><input type="checkbox" bind:checked={showInfo} /> Tampilkan saran ({count('info')})</label>
+    <div class="opts">
+      <label class="check-row"><input type="checkbox" bind:checked={showInfo} /> Tampilkan saran ({count('info')})</label>
+      <label class="check-row" title="RPS yang tanggal penyusunannya lebih lama dari ini diberi peringatan agar ditinjau ulang. Juga dipakai di Pustaka Daring.">
+        Tinjau ulang setiap
+        <select value={review.years} onchange={(e) => setReviewYears(Number(e.currentTarget.value))} aria-label="Jangka tinjauan berkala">
+          {#each REVIEW_CHOICES as y (y)}<option value={y}>{y} tahun</option>{/each}
+        </select>
+      </label>
+    </div>
     {#if shown.length}
       <ul>
         {#each shown as it, i (i)}
@@ -77,6 +87,17 @@
     margin: 0;
     font-size: 0.82rem;
     color: var(--muted);
+  }
+  .opts {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0.3rem 0.75rem;
+  }
+  .opts select {
+    width: auto;
+    padding: 0.1rem 0.3rem;
+    font-size: 0.8rem;
   }
   .check-row {
     display: flex;

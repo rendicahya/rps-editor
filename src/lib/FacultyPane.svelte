@@ -12,6 +12,9 @@
   import { dismiss } from './dismiss.js';
   import { librarySort, sorted } from './librarySort.svelte.js';
   import SortSelect from './SortSelect.svelte';
+  import VersionDiffDialog from './VersionDiffDialog.svelte';
+  import { review, setReviewYears, REVIEW_CHOICES, reviewSince, isReviewDue } from './review.svelte.js';
+  import { formatTanggal } from './model.js';
 
   /**
    * openIds: id RPS yang sedang terbuka di tab. onopen(sop), onupload(folder): di App.
@@ -20,8 +23,11 @@
    * fungsi untuk menautkannya lagi (dipakai Urungkan); selain itu false.
    * Panel di dialog Pustaka: open = dialognya terbuka, active = tab Daring yang tampil, host = elemen <dialog>,
    * tabs = pemilih tab di kepala panel, onclose() menutup dialog.
+   * tabjson(id): isi tab yang sedang membuka RPS `id` (boleh belum tersimpan), atau null.
+   * onrestoretab(id, json): memuat isi versi lama ke tab yang membuka RPS `id`.
+   * onbook(sops, title): menggabungkan `sops` (baris pustaka, berurutan) menjadi satu PDF.
    */
-  let { open = false, active = false, host, tabs, onclose, openIds = [], cansave = true, onopen, onupload, oncreate, onloaded, onrenamed, onbinned, onnotify } = $props();
+  let { open = false, active = false, host, tabs, onclose, openIds = [], cansave = true, onopen, onupload, oncreate, onloaded, onrenamed, onbinned, onnotify, tabjson, onrestoretab, onbook } = $props();
 
   let moveDialog;
   let view = $state('sops'); // sops | bin | admin
@@ -37,6 +43,8 @@
   let busy = $state(false);
   let loadError = $state('');
   let history = $state(null); // { id, versions }
+  let compare = $state(null); // { title, sources, left, right } untuk dialog Bandingkan versi
+  let dueOnly = $state(false); // daftar hanya RPS yang perlu ditinjau ulang, dari semua folder
   let usage = $state(null);
   let members = $state([]);
   let newEmail = $state('');
@@ -55,6 +63,7 @@
     if (open && !wasOpen) {
       query = '';
       history = null;
+      dueOnly = false;
       view = 'sops';
       loaded = false;
     }
@@ -100,11 +109,20 @@
       busy = false;
     }
   }
-  const withText = (s) => ({ ...s, text: haystack({ ...s, fileName: null, tags: [s.createdByName] }) });
+  /** Baris pustaka ditambah teks pencarian dan tanggal acuan tinjauan. */
+  function withText(s) {
+    let identitas = {};
+    try {
+      identitas = JSON.parse(s.json).identitas ?? {};
+    } catch {}
+    return { ...s, text: haystack({ ...s, fileName: null, tags: [s.createdByName] }), since: reviewSince(identitas) };
+  }
 
   const words = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
-  const matches = (s) => words.every((w) => s.text.includes(w));
-  const searching = $derived(words.length > 0);
+  const isDue = (s) => isReviewDue(s.since, review.years);
+  const matches = (s) => words.every((w) => s.text.includes(w)) && (!dueOnly || isDue(s));
+  const searching = $derived(words.length > 0 || dueOnly);
+  const dueCount = $derived(live.filter(isDue).length);
   const shownBin = $derived(bin.filter(matches));
 
   // ---- Folder ----
@@ -190,7 +208,7 @@
   });
   const shownFolders = $derived(
     sorted(
-      searching ? folders.filter((f) => words.every((w) => f.name.toLowerCase().includes(w))) : childrenOf(here),
+      dueOnly ? [] : searching ? folders.filter((f) => words.every((w) => f.name.toLowerCase().includes(w))) : childrenOf(here),
       librarySort.by,
       (f) => f.name,
       (f) => activity.get(f.id) ?? 0
@@ -233,7 +251,7 @@
   const selRows = $derived(rows.filter((r) => selected.has(r.key)));
   // Pilihan dikosongkan setiap pindah folder, tampilan, atau pencarian.
   $effect(() => {
-    view, here, query;
+    view, here, query, dueOnly;
     untrack(() => {
       selected.clear();
       anchor = null;
@@ -416,6 +434,7 @@
     view = 'sops';
     folderId = id;
     query = '';
+    dueOnly = false;
     history = null;
     for (const f of pathOf(id)) expanded.add(f.id);
   }
@@ -757,7 +776,7 @@
         return ui.alert(`${what} berisi item yang tidak ikut dihapus. Pindahkan isinya dulu, atau pilih isinya juga. RPS milik orang lain hanya bisa dipindahkan oleh pemiliknya atau admin.`, { title: 'Folder belum kosong' });
       }
       const what = [dirs.length === 1 ? `folder "${dirs[0].name}"` : `${dirs.length} folder`, sops.length && `${sops.length} RPS`].filter(Boolean).join(' dan ');
-      const note = sops.length ? '\n\nSOP masuk Recycle bin dan bisa dikembalikan, tetapi folder yang dihapus tidak bisa dikembalikan.' : '';
+      const note = sops.length ? '\n\nRPS masuk Recycle bin dan bisa dikembalikan, tetapi folder yang dihapus tidak bisa dikembalikan.' : '';
       if (!(await ui.confirm(`Hapus ${what}?${note}`, { ok: 'Hapus', danger: true }))) return;
     }
     const done = [];
@@ -865,10 +884,67 @@
   }
 
   async function restoreVersion(s, v) {
+    if (isOpen(s)) {
+      // RPS sedang terbuka: isi versi lama dimuat ke tabnya sebagai perubahan biasa (bisa di-Undo), baru masuk ke
+      // Pustaka Daring setelah disimpan. Dengan begitu suntingan di tab tidak tertimpa diam-diam.
+      const msg = `Muat isi versi ${when(v.savedAt)} ke tab "${titleOf(s)}" yang sedang terbuka?\n\nIsi tab diganti, tetapi bisa dibatalkan dengan Urungkan (Ctrl+Z). Simpan ke Pustaka Daring untuk menjadikannya isi terkini.`;
+      if (!(await ui.confirm(msg, { title: 'Kembalikan versi', ok: 'Muat ke tab' }))) return;
+      history = null;
+      onclose();
+      onrestoretab(s.id, v.json);
+      return;
+    }
     const msg = `Kembalikan isi "${titleOf(s)}" ke versi ${when(v.savedAt)}? Isi saat ini tetap tersimpan di Riwayat.`;
     if (!(await ui.confirm(msg, { ok: 'Kembalikan' }))) return;
     history = null;
     act(() => F.restoreVersion(s.id, v), 'Versi lama dikembalikan');
+  }
+
+  /** Dialog Bandingkan versi: `v` dibandingkan dengan isi terkini (atau versi `v` saja bila tidak diberikan). */
+  async function compareVersions(s, v = null) {
+    let versions;
+    try {
+      versions = history?.id === s.id ? history.versions : await F.listVersions(s.id);
+    } catch (e) {
+      return ui.alert(e.message);
+    }
+    if (!versions.length) return ui.alert('RPS ini belum punya versi lama untuk dibandingkan.');
+    const tab = isOpen(s) ? tabjson?.(s.id) : null;
+    const sources = [
+      ...(tab && tab !== s.json ? [{ key: 'tab', label: 'Isi di tab (belum disimpan)', json: tab }] : []),
+      { key: 'cur', label: `Isi terkini · ${when(s.updatedAt)} · ${s.updatedByName}`, json: s.json },
+      ...versions.map((x) => ({ key: 'v' + x.rev, label: `${when(x.savedAt)} · ${x.savedByName}`, json: x.json }))
+    ];
+    compare = { title: titleOf(s), sources, left: 'v' + (v ?? versions[0]).rev, right: 'cur' };
+  }
+
+  // ---- Gabung jadi satu PDF ----
+  /** RPS pada entri `list`, termasuk isi folder (dan subfoldernya) yang dipilih, dalam urutan tampilan daftar. */
+  function sopsOf(list) {
+    const out = [];
+    const seen = new Set();
+    const put = (s) => !seen.has(s.id) && (seen.add(s.id), out.push(s));
+    const walk = (id, depth = 0) => {
+      if (depth > 50) return;
+      for (const s of sorted(live.filter((x) => folderOf(x) === id), librarySort.by, titleOf, (x) => x.updatedAt)) put(s);
+      for (const f of childrenOf(id)) walk(f.id, depth + 1);
+    };
+    for (const d of list) (d.isFolder ? walk(d.item.id) : put(d.item));
+    return out;
+  }
+  async function makeBook(list) {
+    const sops = sopsOf(list);
+    if (!sops.length) return ui.alert('Tidak ada RPS di pilihan ini.');
+    const folder = list.length === 1 && list[0].isFolder ? list[0].item.name : '';
+    const raw = await ui.prompt(
+      `${sops.length} RPS digabung menjadi satu PDF, diawali halaman daftar isi yang bisa diklik. Judul halaman depan:`,
+      folder ? `Kumpulan RPS ${folder}` : 'Kumpulan RPS',
+      { title: 'Gabung jadi satu PDF', ok: 'Buat PDF', maxlength: 200 }
+    );
+    const title = raw?.trim().replace(/\s+/g, ' ');
+    if (!title) return;
+    onclose();
+    onbook(sops, title);
   }
 
   // ---- Hak akses ----
@@ -915,6 +991,8 @@
     const n = own.length;
     return [
       { head: `${list.length} item dipilih` },
+      { label: 'Gabung jadi satu PDF…', icon: 'book', run: () => makeBook(list) },
+      { sep: true },
       { label: `Pindahkan ${n} item…`, icon: 'move', run: () => startMove(own), disabled: !n },
       { label: 'Potong', icon: 'cut', hint: 'Ctrl+X', run: () => cut(own), disabled: !n },
       { sep: true },
@@ -948,6 +1026,7 @@
       { sep: true },
       ...hereItems(f.id),
       { sep: true },
+      { label: 'Gabung isinya jadi satu PDF…', icon: 'book', run: () => makeBook([entryOf(f, true)]), disabled: !sopsOf([entryOf(f, true)]).length },
       { label: accessTip(f), icon: 'users', run: () => openAccess('folders', f) },
       ...(canEdit(f) ? [{ label: 'Ubah nama', icon: 'pencil', hint: 'F2', run: () => renameFolder(f) }] : []),
       ...(manage
@@ -967,6 +1046,7 @@
       { sep: true },
       { label: 'Duplikat', icon: 'copy', run: () => duplicate(s) },
       { label: 'Riwayat', icon: 'history', run: () => toggleHistory(s) },
+      { label: 'Bandingkan versi…', icon: 'compare', run: () => compareVersions(s) },
       ...(manage ? [{ label: 'Hapus riwayat lama…', icon: 'trash', run: () => pruneOld(s) }] : []),
       { label: accessTip(s), icon: 'users', run: () => openAccess('sops', s) },
       ...(canEdit(s) ? [{ label: 'Ubah nama', icon: 'pencil', hint: 'F2', run: () => rename(s) }] : []),
@@ -1080,6 +1160,7 @@
         <button type="button" class="btn" onclick={() => restoreMany(selRows.map((d) => d.item))}><Icon name="restore" size={14} /> Pulihkan</button>
         <button type="button" class="btn danger" onclick={() => purgeMany(selRows.map((d) => d.item))}><Icon name="trash" size={14} /> Hapus permanen</button>
       {:else}
+        <button type="button" class="btn" onclick={() => makeBook(selRows)} title="Gabungkan RPS yang dipilih (termasuk isi folder) menjadi satu PDF berdaftar isi"><Icon name="book" size={14} /> Gabung PDF</button>
         <button type="button" class="btn" disabled={!own.length} onclick={() => startMove(own)}><Icon name="move" size={14} /> Pindahkan</button>
         <button type="button" class="btn danger" disabled={!own.length} onclick={() => deleteMany(own)}><Icon name="trash" size={14} /> Hapus</button>
       {/if}
@@ -1093,8 +1174,8 @@
 {#snippet node(f, depth)}
   {@const kids = childrenOf(f.id)}
   {@const opened = expanded.has(f.id)}
-  <li role="treeitem" aria-selected={view === 'sops' && here === f.id} aria-expanded={kids.length ? opened : undefined}>
-    <div class="tn" data-id={f.id} class:sel={view === 'sops' && here === f.id} class:drop={dropAt === f.id} class:dragging={dragged(f.id)} style:padding-left="{depth * 0.9 + 0.2}rem" role="presentation" draggable={canManage(f)} ondragstart={(e) => dragStart(e, f, true)} ondragend={dragEnd} {...dropzone(f.id)} oncontextmenu={(e) => openMenu(e, folderMenu(f))}>
+  <li role="treeitem" aria-selected={view === 'sops' && !dueOnly && here === f.id} aria-expanded={kids.length ? opened : undefined}>
+    <div class="tn" data-id={f.id} class:sel={view === 'sops' && !dueOnly && here === f.id} class:drop={dropAt === f.id} class:dragging={dragged(f.id)} style:padding-left="{depth * 0.9 + 0.2}rem" role="presentation" draggable={canManage(f)} ondragstart={(e) => dragStart(e, f, true)} ondragend={dragEnd} {...dropzone(f.id)} oncontextmenu={(e) => openMenu(e, folderMenu(f))}>
       {#if kids.length}
         <button type="button" class="chev" class:open={opened} aria-label={opened ? `Tutup ${f.name}` : `Buka ${f.name}`} onclick={() => toggle(f.id)}><Icon name="chevron" size={13} /></button>
       {:else}
@@ -1141,8 +1222,8 @@
         <div class="split" role="separator" aria-orientation="vertical" aria-label="Lebar daftar folder" aria-valuenow={treeW} aria-valuemin={TREE_MIN} tabindex="0" title="Geser untuk mengubah lebar (klik dua kali: lebar awal)" onpointerdown={splitDown} onkeydown={splitKey} ondblclick={() => setTree(TREE_DEFAULT)}></div>
         <div class="tree" role="presentation" oncontextmenu={(e) => openMenu(e, hereItems(null))}>
           <ul role="tree" aria-label="Folder" bind:this={treeEl} onkeydown={treeKey}>
-            <li role="treeitem" aria-selected={view === 'sops' && !here}>
-              <div class="tn" data-id="" class:sel={view === 'sops' && !here} class:drop={dropAt === null} style:padding-left="0.2rem" role="presentation" {...dropzone(null)}>
+            <li role="treeitem" aria-selected={view === 'sops' && !dueOnly && !here}>
+              <div class="tn" data-id="" class:sel={view === 'sops' && !dueOnly && !here} class:drop={dropAt === null} style:padding-left="0.2rem" role="presentation" {...dropzone(null)}>
                 <span class="chev none"></span>
                 <button type="button" class="tname" onclick={() => select(null)}>
                   <Icon name="folder" size={15} />
@@ -1155,6 +1236,18 @@
           </ul>
         </div>
         <nav aria-label="Lainnya">
+          <button
+            type="button"
+            class="tname nav"
+            class:sel={view === 'sops' && dueOnly}
+            title={`RPS yang disusun lebih dari ${review.years} tahun lalu (menurut tanggal penyusunan)`}
+            onclick={() => {
+              select(here);
+              dueOnly = true;
+            }}
+          >
+            <Icon name="alert" size={15} /><span>Perlu ditinjau</span>{#if dueCount}<small class="due">{dueCount}</small>{/if}
+          </button>
           <button type="button" class="tname nav" class:sel={view === 'bin'} onclick={() => (view = 'bin')}>
             <Icon name="trash" size={15} /><span>Recycle bin</span>{#if bin.length}<small>{bin.length}</small>{/if}
           </button>
@@ -1164,7 +1257,16 @@
       <section class="content">
         {#if view === 'sops'}
           <div class="crumbs">
-            {#if searching}
+            {#if dueOnly}
+              <span class="muted grow due-head">
+                Perlu ditinjau: disusun lebih dari
+                <select value={review.years} onchange={(e) => setReviewYears(Number(e.currentTarget.value))} aria-label="Jangka tinjauan berkala">
+                  {#each REVIEW_CHOICES as y (y)}<option value={y}>{y} tahun</option>{/each}
+                </select>
+                lalu (menurut tanggal penyusunan){words.length ? ', sesuai pencarian' : ''}
+                <button type="button" class="link" onclick={() => (dueOnly = false)}>Tampilkan semua</button>
+              </span>
+            {:else if searching}
               <span class="muted grow">Hasil pencarian di semua folder</span>
             {:else}
               <nav class="grow" aria-label="Lokasi folder">
@@ -1225,9 +1327,10 @@
                     {#if s.custom && folderOf(s)}<em>Khusus</em>{/if}
                     {#if !canEdit(s)}<em>Hanya lihat</em>{/if}
                     {#if isOpen(s)}<em>Terbuka di tab</em>{/if}
+                    {#if isDue(s)}<em class="due" title={`Disusun ${formatTanggal(s.since)}, lebih dari ${review.years} tahun lalu`}>Perlu ditinjau</em>{/if}
                   </strong>
                   <small title={s.createdByEmail}>
-                    {[searching && folderOf(s) && `di ${pathText(folderOf(s))}`, s.nomor, `dibuat ${s.createdBy === faculty.user.uid ? 'Anda' : s.createdByName}`, `diubah ${s.updatedByName}, ${when(s.updatedAt)}`].filter(Boolean).join(' · ')}
+                    {[searching && folderOf(s) && `di ${pathText(folderOf(s))}`, dueOnly && `disusun ${formatTanggal(s.since)}`, s.nomor, `dibuat ${s.createdBy === faculty.user.uid ? 'Anda' : s.createdByName}`, `diubah ${s.updatedByName}, ${when(s.updatedAt)}`].filter(Boolean).join(' · ')}
                   </small>
                   {#if editors}<small class="editing">✎ Sedang diedit oleh {editors}</small>{/if}
                 </button>
@@ -1243,18 +1346,22 @@
                 </span>
                 {#if history?.id === s.id}
                   <div class="history">
-                    {#if manage && history.versions.length}
+                    {#if history.versions.length}
                       <div class="hhead">
-                        <span class="muted">{history.versions.length} versi lama · {size(sumSize(history.versions))}</span>
-                        <button type="button" class="link" onclick={() => pruneOld(s)}>Hapus riwayat lama…</button>
+                        <span class="muted">{history.versions.length} versi lama{manage ? ` · ${size(sumSize(history.versions))}` : ''}</span>
+                        <span class="hacts">
+                          <button type="button" class="link cmp" onclick={() => compareVersions(s)}>Bandingkan versi…</button>
+                          {#if manage}<button type="button" class="link" onclick={() => pruneOld(s)}>Hapus riwayat lama…</button>{/if}
+                        </span>
                       </div>
                     {/if}
                     {#each history.versions as v (v.rev)}
                       <div>
                         <span>{when(v.savedAt)} · {v.savedByName}</span>
                         <span class="hacts">
+                          {@render ib('compare', 'Bandingkan dengan isi terkini', () => compareVersions(s, v))}
                           {#if canEdit(s)}
-                            {@render ib('restore', isOpen(s) ? 'Tutup tabnya dulu untuk mengembalikan versi' : 'Kembalikan versi ini', () => restoreVersion(s, v), { disabled: isOpen(s) })}
+                            {@render ib('restore', isOpen(s) ? 'Muat versi ini ke tab yang terbuka (simpan untuk menerapkannya)' : 'Kembalikan versi ini', () => restoreVersion(s, v))}
                           {/if}
                           {#if manage}
                             {@render ib('trash', 'Hapus versi ini dari riwayat', () => pruneOne(s, v), { danger: true })}
@@ -1436,6 +1543,18 @@
 </dialog>
 
 <AccessDialog target={accessTarget} onsave={saveAccess} onclose={() => (accessTarget = null)} />
+
+{#if compare}
+  <VersionDiffDialog
+    open={true}
+    title={compare.title}
+    sources={compare.sources}
+    bind:left={compare.left}
+    bind:right={compare.right}
+    onclose={() => (compare = null)}
+  />
+{/if}
+
 
 <style>
   .dialog {
@@ -1922,6 +2041,32 @@
   }
   .history .link:hover {
     text-decoration: underline;
+  }
+  .history .hhead .hacts {
+    gap: 0.9rem;
+  }
+  .history .link.cmp {
+    color: var(--accent);
+  }
+  em.due {
+    color: #92400e;
+    background: var(--warn-bg, #fef3c7);
+    border-color: var(--warn-line, #f59e0b);
+  }
+  small.due {
+    color: #92400e !important;
+    font-weight: 600;
+  }
+  .due-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem;
+  }
+  .due-head select {
+    width: auto;
+    padding: 0.05rem 0.3rem;
+    font-size: 0.8rem;
   }
   .empty {
     justify-content: center;
