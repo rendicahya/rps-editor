@@ -3,6 +3,7 @@
   import LocalPane from './LocalPane.svelte';
   import FacultyPane from './FacultyPane.svelte';
   import { tips } from './tips.js';
+  import Icon from './Icon.svelte';
 
   /**
    * Dialog Pustaka: tab Lokal (browser ini) dan Daring (RPS bersama). Kedua panel tetap terpasang, jadi folder dan
@@ -16,8 +17,8 @@
   // Pustaka Daring RPS: koleksi rps/rpsFolders (aturannya di firestore.rules repositori SOP Editor).
   const FACULTY_READY = true;
   const TABS = [
-    ['local', 'Lokal', 'RPS yang disimpan di browser ini'],
-    ...(FACULTY_READY ? [['faculty', 'Daring', 'RPS bersama secara daring, untuk anggota fakultas']] : [])
+    ['local', 'Lokal', 'RPS yang disimpan di browser ini', 'laptop'],
+    ...(FACULTY_READY ? [['faculty', 'Daring', 'RPS bersama secara daring, untuk anggota fakultas', 'cloud']] : [])
   ];
 
   let dialog = $state();
@@ -59,7 +60,7 @@
 {#snippet tabs()}
   <div class="libtabs" role="tablist" aria-label="Pustaka" tabindex="-1" onkeydown={tabKey}>
     <span class="label">Pustaka</span>
-    {#each TABS as [t, name, desc] (t)}
+    {#each TABS as [t, name, desc, icon] (t)}
       <button
         type="button"
         role="tab"
@@ -67,13 +68,31 @@
         aria-controls="libpane-{t}"
         tabindex={tab === t ? 0 : -1}
         data-tip={desc}
-        onclick={() => choose(t)}>{name}</button
+        onclick={() => choose(t)}><Icon name={icon} size={15} /><span>{name}</span></button
       >
     {/each}
   </div>
 {/snippet}
 
-<dialog bind:this={dialog} class="dialog" use:tips onclose={close}>
+<!-- Berkas yang dilepas di dialog ini tidak sampai ke editor di belakangnya (yang membukanya di tab).
+     Tab Daring menangani sendiri berkas yang dilepas di foldernya. -->
+<dialog
+  bind:this={dialog}
+  class="dialog"
+  use:tips
+  onclose={close}
+  ondragover={(e) => {
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    e.stopPropagation();
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'none';
+  }}
+  ondrop={(e) => {
+    if (!e.dataTransfer?.types.includes('Files')) return;
+    e.stopPropagation();
+    e.preventDefault();
+  }}
+>
   <div class="pane" id="libpane-local" data-pane="local" role="tabpanel" aria-label="Pustaka Lokal" hidden={tab !== 'local'}>
     <LocalPane {open} active={tab === 'local'} {tabs} onclose={close} {...local} />
   </div>
@@ -126,6 +145,9 @@
     padding: 0 0.6rem 0 0.4rem;
   }
   [role='tab'] {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
     border: 0;
     border-radius: 7px;
     background: none;

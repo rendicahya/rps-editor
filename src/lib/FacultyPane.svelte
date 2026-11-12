@@ -354,13 +354,13 @@
     }
     const { items, skipped } = res;
     const skippedText = skipped.length ? `\n\nDilewati (${skipped.length}):\n${list(skipped.map((s) => `• ${s.name}: ${s.reason}`))}` : '';
-    if (!items.length) return ui.alert(`Tidak ada RPS yang bisa diimpor.${skippedText}`, { title: 'Impor RPS' });
+    if (!items.length) return ui.alert(`Tidak ada RPS yang bisa diunggah. Lepaskan berkas .rps, atau berkas .zip berisi berkas .rps.${skippedText}`, { title: 'Tidak ada yang diunggah' });
     const dirs = new Set(items.flatMap((i) => i.folders.map((_, k) => i.folders.slice(0, k + 1).join('/'))));
     const msg =
-      `Impor ${items.length} RPS ke folder ${placeName(target)}?` +
-      (dirs.size ? `\n\nStruktur folder di dalam ZIP ikut dibuat (${dirs.size} folder; folder bernama sama dipakai ulang).` : '') +
+      `Unggah ${items.length} RPS ke ${target ? `folder ${placeName(target)}` : 'Utama'}?` +
+      (dirs.size ? `\n\nFolder di dalam ZIP ikut dibuat (${dirs.size} folder). Folder yang namanya sudah ada di sini dipakai.` : '') +
       `\n\n${list(items.map((i) => `• ${i.title}`))}${skippedText}`;
-    if (!(await ui.confirm(msg, { title: 'Impor RPS', ok: `Impor ${items.length} RPS` }))) return;
+    if (!(await ui.confirm(msg, { title: 'Unggah ke Pustaka Daring', ok: 'Unggah' }))) return;
 
     importing = { done: 0, total: items.length };
     const made = new Map(); // 'A/B' → Promise<id folder>
@@ -371,7 +371,8 @@
         if (!made.has(key)) {
           const name = path[k].slice(0, 120).trim();
           made.set(key, p.then((parent) => {
-            const same = folders.find((f) => (parents.get(f.id) ?? null) === parent && f.name.toLowerCase() === name.toLowerCase() && canAdd(f.id));
+            const same = folders.find((f) => (parents.get(f.id) ?? null) === parent && f.name.toLowerCase() === name.toLowerCase());
+            if (same && !canAdd(same.id)) throw new Error(`folder "${name}" sudah ada dan bukan milik Anda`);
             return same ? same.id : F.createFolder(name, parent);
           }));
         }
@@ -380,20 +381,29 @@
       return p;
     };
     const failed = [];
+    let ok = 0;
+    let stopped = false;
     for (const it of items) {
       try {
         await F.uploadSop(it.doc, it.title, await ensureFolder(it.folders));
+        ok++;
       } catch (e) {
         failed.push(`• ${it.name}: ${e.message}`);
+        if (e.code === 'full') {
+          stopped = true; // penyimpanan penuh: sisanya pasti gagal juga
+          break;
+        }
       }
       importing.done++;
     }
-    const ok = items.length - failed.length;
     importing = null;
     if (target) expanded.add(target);
     await refresh();
-    if (failed.length) ui.alert(`${ok} RPS berhasil diimpor, ${failed.length} gagal:\n${list(failed)}`, { title: 'Impor RPS' });
-    else onnotify(`${ok} RPS diimpor ke ${placeName(target)}`);
+    if (ok) onnotify(`${ok} RPS diunggah ke ${placeName(target)}`);
+    if (failed.length) {
+      const rest = stopped ? `\n\n${items.length - ok - failed.length} RPS lainnya tidak diunggah.` : '';
+      ui.alert(`${failed.length} RPS gagal diunggah:\n\n${list(failed)}${rest}`, { title: ok ? 'Sebagian gagal diunggah' : 'Gagal mengunggah' });
+    }
   }
 
   async function act(fn, done) {
@@ -500,7 +510,7 @@
       { label: 'RPS baru di sini', run: () => newSop(id), disabled: !add },
       { label: 'Folder baru di sini', run: () => newFolder(id), disabled: !add },
       { label: 'Unggah dokumen ini ke sini', run: () => onupload(id), disabled: !add || !cansave },
-      { label: 'Impor ZIP/berkas RPS ke sini…', run: () => pickImport(id), disabled: !add || !!importing }
+      { label: 'Unggah berkas .rps atau .zip ke sini…', run: () => pickImport(id), disabled: !add || !!importing }
     ];
   }
   function folderMenu(f) {
@@ -717,14 +727,17 @@
             {@render ib('filePlus', canAdd(here) ? 'RPS baru di sini' : noAddTip, () => newSop(), { disabled: !canAdd(here) })}
             {@render ib('folderPlus', canAdd(here) ? 'Folder baru di sini' : noAddTip, () => newFolder(), { disabled: !canAdd(here) })}
             {@render ib('upload', uploadTip, () => onupload(here), { disabled: !!uploadBlocked })}
-            {@render ib('import', !canAdd(here) ? noAddTip : 'Impor ZIP berisi berkas .rps (atau .rps/.json/PDF) ke sini — bisa juga diseret ke daftar', () => pickImport(), { disabled: !canAdd(here) || !!importing })}
+            {@render ib('import', !canAdd(here) ? noAddTip : 'Unggah berkas .rps atau .zip ke sini (bisa juga diseret ke daftar)', () => pickImport(), { disabled: !canAdd(here) || !!importing })}
             {@render ib('refresh', 'Muat ulang daftar', refresh)}
           </div>
           {#if importing}
             <div class="importing" role="status">
-              <span>Mengimpor {importing.done} dari {importing.total} RPS…</span>
+              <span>Mengunggah {Math.min(importing.done + 1, importing.total)} dari {importing.total} RPS…</span>
               <div class="meter"><span style:width="{(importing.done / importing.total) * 100}%"></span></div>
             </div>
+          {/if}
+          {#if !drag && dropAt !== undefined}
+            <p class="filehint" aria-hidden="true">Lepaskan berkas .rps atau .zip untuk mengunggah ke {dropAt ? byId.get(dropAt)?.name : 'Utama'}</p>
           {/if}
           <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
           <ul class="list" class:drop={!searching && dropAt !== undefined && dropAt === here} oncontextmenu={(e) => openMenu(e, hereItems(here))} {...(searching ? {} : dropzone(here))}>
@@ -784,7 +797,7 @@
             {#if !shownFolders.length && !shownLive.length}
               <li class="empty">
                 {busy ? 'Memuat…' : searching ? 'Tidak ada yang cocok.' : here ? 'Folder ini masih kosong.' : 'Belum ada folder atau RPS di sini.'}
-                {#if !busy && !searching && canAdd(here)}<small>Seret ZIP berisi berkas .rps ke sini untuk mengimpor banyak RPS sekaligus.</small>{/if}
+                {#if !busy && !searching && canAdd(here)}<small>Seret berkas .rps atau .zip ke sini untuk mengunggah banyak RPS sekaligus.</small>{/if}
               </li>
             {/if}
           </ul>
@@ -1427,6 +1440,26 @@
     display: block;
     height: 100%;
     background: var(--accent);
+  }
+  .content {
+    position: relative;
+  }
+  .filehint {
+    position: absolute;
+    left: 50%;
+    bottom: 1rem;
+    transform: translateX(-50%);
+    z-index: 2;
+    margin: 0;
+    padding: 0.45rem 0.9rem;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+    pointer-events: none;
+    box-shadow: 0 4px 14px rgb(0 0 0 / 0.2);
   }
   .importing {
     margin: 0 0 0.4rem;

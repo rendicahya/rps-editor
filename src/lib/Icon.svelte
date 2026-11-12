@@ -2,6 +2,8 @@
   // Ikon garis untuk tombol ringkas. Warnanya mengikuti teks.
   const PATHS = {
     chevron: ['m9 6 6 6-6 6'],
+    cloud: ['M7 18.5h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.6 9.1 4.75 4.75 0 0 0 7 18.5z'],
+    laptop: ['M5 6.5A1.5 1.5 0 0 1 6.5 5h11A1.5 1.5 0 0 1 19 6.5V15H5z', 'M2.5 18.5h19'],
     copy: ['M9 9h11v11H9z', 'M5 15H4V4h11v1'],
     file: ['M6 3h8l4 4v14H6z', 'M14 3v4h4'],
     filePlus: ['M6 3h8l4 4v14H6z', 'M14 3v4h4', 'M12 11v6', 'M9 14h6'],

@@ -839,8 +839,6 @@
   async function onDrop(e) {
     e.preventDefault();
     dragging = false;
-    // Saat Pustaka terbuka, berkas hanya diterima oleh daftar Pustaka Daring (diimpor), bukan dibuka di tab.
-    if (libraryOpen) return;
     for (const file of e.dataTransfer?.files ?? []) await loadFile(file, null);
   }
 
@@ -929,8 +927,7 @@
   ondragover={(e) => {
     if (e.dataTransfer?.types.includes('Files')) {
       e.preventDefault();
-      if (libraryOpen) e.dataTransfer.dropEffect = 'none';
-      else dragging = true;
+      dragging = true;
     }
   }}
   ondragleave={(e) => {

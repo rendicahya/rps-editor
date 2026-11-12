@@ -5,7 +5,8 @@ import { parseDocumentText, docTitle } from './model.js';
 import { rpsFromPdf } from './pdf.js';
 
 const RPS_EXT = /\.(rps|json|pdf)$/i;
-const MAX_ENTRY = 8 * 1024 * 1024; // per berkas di dalam ZIP (PDF bisa jauh lebih besar dari .rps-nya)
+const MAX_FILES = 500; // sama dengan SOP Editor
+const MAX_ENTRY =8 * 1024 * 1024; // per berkas di dalam ZIP (PDF bisa jauh lebih besar dari .rps-nya)
 const MAX_TOTAL = 300 * 1024 * 1024; // total isi ZIP setelah diekstrak, pengaman ZIP bom
 // Berkas sistem yang ikut terkemas di ZIP buatan macOS/Windows.
 const JUNK = /(^|\/)(__MACOSX|\.[^/]*|Thumbs\.db|desktop\.ini)(\/|$)/i;
@@ -89,6 +90,7 @@ export async function readRpsFiles(files) {
       skipped.push({ name: file.name, reason: 'bukan berkas .zip, .rps, .json, atau .pdf' });
     }
   }
+  if (entries.length > MAX_FILES) throw new Error(`Terlalu banyak berkas RPS sekaligus (${entries.length}, maksimal ${MAX_FILES}). Bagi menjadi beberapa ZIP.`);
   const out = readEntries(entries);
   out.skipped.unshift(...skipped);
   return out;

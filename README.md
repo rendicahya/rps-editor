@@ -43,9 +43,10 @@ Sudah ada:
 
 - **Pustaka Daring** seperti SOP Editor (folder, hak akses per anggota/grup, riwayat, recycle bin, "sedang diedit"),
   dengan koleksi RPS sendiri; anggota dan grup sama dengan SOP Editor.
-  - **Impor massal**: seret berkas ZIP berisi `.rps` ke daftar atau ke folder di pohon (atau tombol Impor / menu
-    klik kanan). Subfolder di dalam ZIP dibuat ulang, dan folder bernama sama dipakai ulang. Berkas `.rps`/`.json`
-    lepas dan PDF hasil ekspor RPS Editor juga diterima. Berkas yang tidak terbaca dilewati dan disebutkan.
+  - **Unggah banyak sekaligus** (seperti SOP Editor): seret berkas `.rps` atau ZIP berisi `.rps` ke daftar atau ke
+    folder di pohon (atau tombol unggah berkas / menu klik kanan), maksimal 500 berkas. Subfolder di dalam ZIP dibuat
+    ulang; folder bernama sama yang milik Anda dipakai. PDF hasil ekspor RPS Editor juga diterima. Berkas yang tidak
+    terbaca dilewati dan disebutkan alasannya; unggahan berhenti bila penyimpanan penuh.
 - **Katalog Kurikulum** (tombol **Kurikulum**): CPL dan CPMK per prodi di Pustaka Daring.
   - Admin menambah/menghapus prodi dan menunjuk **pengelola prodi** (email).
   - Pengelola prodi (dan admin) mengedit CPL/CPMK prodinya beserta relasi CPMK → CPL.
