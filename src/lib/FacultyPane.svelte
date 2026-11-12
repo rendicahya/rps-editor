@@ -1,4 +1,5 @@
 <script>
+  import { tick, untrack } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
   import { haystack } from './library.js';
   import { readRpsFiles } from './bulkImport.js';
@@ -8,11 +9,15 @@
   import ContextMenu from './ContextMenu.svelte';
   import Icon from './Icon.svelte';
   import * as ui from './ask.svelte.js';
+  import { dismiss } from './dismiss.js';
+  import { librarySort, sorted } from './librarySort.svelte.js';
+  import SortSelect from './SortSelect.svelte';
 
   /**
    * openIds: id RPS yang sedang terbuka di tab. onopen(sop), onupload(folder): di App.
    * onloaded(live): daftar baru dimuat, tab yang terbuka mengikuti hak akses terbaru. onrenamed(id, hasil renameSop): tab mengikuti.
-   * onbinned(id): tab RPS yang dihapus ditutup; hasilnya true bila tab dipertahankan karena ada perubahan belum tersimpan.
+   * onbinned(id): tab RPS yang dihapus ditutup. Bila tab dipertahankan karena ada perubahan belum tersimpan, hasilnya
+   * fungsi untuk menautkannya lagi (dipakai Urungkan); selain itu false.
    * Panel di dialog Pustaka: open = dialognya terbuka, active = tab Daring yang tampil, host = elemen <dialog>,
    * tabs = pemilih tab di kepala panel, onclose() menutup dialog.
    */
@@ -121,7 +126,6 @@
   const pathText = (id) => pathOf(id).map((f) => f.name).join(' / ');
   const crumbs = $derived(pathOf(here));
 
-  const shownFolders = $derived(searching ? folders.filter((f) => words.every((w) => f.name.toLowerCase().includes(w))).sort(byName) : childrenOf(here));
   /** Ringkasan isi folder untuk baris folder di panel kanan. */
   function folderInfo(f) {
     const subs = childrenOf(f.id).length;
@@ -171,7 +175,27 @@
     else return;
     e.preventDefault();
   }
-  const shownLive = $derived(live.filter((s) => (searching ? matches(s) : folderOf(s) === here)));
+  const shownLive = $derived(
+    sorted(live.filter((s) => (searching ? matches(s) : folderOf(s) === here)), librarySort.by, titleOf, (s) => s.updatedAt)
+  );
+  /** Waktu perubahan terakhir di dalam folder (termasuk subfolder), untuk urutan menurut tanggal. */
+  const activity = $derived.by(() => {
+    const out = new Map(folders.map((f) => [f.id, f.createdAt ?? 0]));
+    for (const s of live) {
+      for (let id = folderOf(s), n = 0; id && n < 100; id = parents.get(id), n++) {
+        if (s.updatedAt > (out.get(id) ?? 0)) out.set(id, s.updatedAt);
+      }
+    }
+    return out;
+  });
+  const shownFolders = $derived(
+    sorted(
+      searching ? folders.filter((f) => words.every((w) => f.name.toLowerCase().includes(w))) : childrenOf(here),
+      librarySort.by,
+      (f) => f.name,
+      (f) => activity.get(f.id) ?? 0
+    )
+  );
   const counts = $derived.by(() => {
     const out = new Map();
     for (const s of live) out.set(folderOf(s), (out.get(folderOf(s)) ?? 0) + 1);
@@ -191,7 +215,202 @@
     return out;
   });
   // Tujuan harus folder milik sendiri (admin: semua folder). Folder tidak bisa dipindahkan ke dirinya sendiri atau ke dalam subfoldernya.
-  const moveTargets = $derived(flatTree.filter((t) => canAdd(t.id) && !(moving?.isFolder && pathOf(t.id).some((a) => a.id === moving.item.id))));
+  const moveTargets = $derived(flatTree.filter((t) => canAdd(t.id) && !insideMoved(moving?.entries ?? [], t.id)));
+
+  // ---- Pilihan dan navigasi keyboard di daftar ----
+  // `cursor`: baris yang sedang difokuskan. Pilihan (`selected`) terpisah dari kursor: Ctrl+klik/Spasi menandai satu,
+  // Shift+klik/Shift+panah menandai rentang dari `anchor`. Tindakan berlaku untuk pilihan, atau baris kursor bila tidak ada pilihan.
+  const selected = new SvelteSet();
+  let anchor = null;
+  let cursor = $state(null);
+  let clip = $state(null); // entri yang dipotong (Ctrl+X), menunggu Ctrl+V
+  let listEl = $state();
+  let treeEl = $state();
+  let search = $state();
+  const rows = $derived(
+    view === 'bin' ? shownBin.map((s) => entryOf(s, false)) : view === 'sops' ? [...shownFolders.map((f) => entryOf(f, true)), ...shownLive.map((s) => entryOf(s, false))] : []
+  );
+  const selRows = $derived(rows.filter((r) => selected.has(r.key)));
+  // Pilihan dikosongkan setiap pindah folder, tampilan, atau pencarian.
+  $effect(() => {
+    view, here, query;
+    untrack(() => {
+      selected.clear();
+      anchor = null;
+    });
+  });
+
+  function selectRange(from, to) {
+    const keys = rows.map((r) => r.key);
+    let a = keys.indexOf(from);
+    const b = keys.indexOf(to);
+    if (b < 0) return;
+    if (a < 0) a = b;
+    selected.clear();
+    for (let i = Math.min(a, b); i <= Math.max(a, b); i++) selected.add(keys[i]);
+  }
+  function toggleSel(key) {
+    if (!selected.delete(key)) selected.add(key);
+    anchor = key;
+  }
+  /** Klik baris: Ctrl/Cmd menandai satu, Shift menandai rentang, klik biasa membuka. */
+  function rowClick(e, row, open) {
+    const prev = cursor;
+    cursor = row.key;
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      toggleSel(row.key);
+    } else if (e.shiftKey) {
+      e.preventDefault();
+      if (!selected.size || !anchor) anchor = prev ?? row.key;
+      selectRange(anchor, row.key);
+    } else open();
+  }
+  function pickClick(e, row) {
+    e.stopPropagation();
+    const prev = cursor;
+    cursor = row.key;
+    if (e.shiftKey && (selected.size ? anchor : prev)) {
+      if (!selected.size || !anchor) anchor = prev;
+      selectRange(anchor, row.key);
+    } else toggleSel(row.key);
+  }
+  /** Sasaran tindakan: pilihan, atau baris kursor bila tidak ada yang dipilih. */
+  const targets = () => (selRows.length ? selRows : rows.filter((r) => r.key === cursor));
+
+  async function focusRow(key) {
+    await tick();
+    const el = key && listEl?.querySelector(`[data-key="${CSS.escape(key)}"] .main`);
+    if (el) {
+      cursor = key;
+      el.focus();
+      el.scrollIntoView({ block: 'nearest' });
+    } else listEl?.focus();
+  }
+  /** Masuk ke folder lewat keyboard, lalu fokus ke baris pertama isinya (atau ke `key`). */
+  async function enterFolder(id, key) {
+    select(id);
+    await tick();
+    focusRow(key ?? rows[0]?.key);
+  }
+  function openRow(row) {
+    if (view === 'bin') return;
+    if (row.isFolder) enterFolder(row.item.id);
+    else openSop(row.item);
+  }
+  function renameRow(row) {
+    if (view === 'bin' || !canEdit(row.item)) return;
+    row.isFolder ? renameFolder(row.item) : rename(row.item);
+  }
+  function cut(list) {
+    const own = list.filter((d) => canManage(d.item));
+    if (!own.length) return onnotify('Tidak ada yang bisa dipindahkan di antara yang dipilih');
+    clip = own;
+    onnotify(`${countText(own)} dipotong. Buka folder tujuan, lalu tekan Ctrl+V.`);
+  }
+  function paste(target = here) {
+    if (!clip || view !== 'sops') return;
+    const list = clip;
+    clip = null;
+    moveMany(list, target);
+  }
+  function removeRows(list) {
+    if (view === 'bin') purgeMany(list.map((d) => d.item));
+    else deleteMany(list);
+  }
+
+  function listKey(e) {
+    const t = e.target;
+    if (t.matches('input:not(.pick), textarea, select')) return;
+    const onRow = t === listEl || !!t.closest('.main') || t.matches('.pick');
+    const i = rows.findIndex((r) => r.key === cursor);
+    const row = rows[i];
+    const ctrl = e.ctrlKey || e.metaKey;
+    const go = (j) => {
+      const next = rows[Math.max(0, Math.min(rows.length - 1, j))];
+      if (!next) return;
+      if (e.shiftKey) {
+        if (!selected.size || !anchor) anchor = cursor ?? next.key;
+        selectRange(anchor, next.key);
+      }
+      focusRow(next.key);
+    };
+    const k = e.key;
+    if (k === 'ArrowDown') go(i < 0 ? 0 : i + 1);
+    else if (k === 'ArrowUp' && e.altKey) here && !searching && enterFolder(parents.get(here) ?? null, 'f:' + here);
+    else if (k === 'ArrowUp') go(i < 0 ? 0 : i - 1);
+    else if (k === 'Home') go(0);
+    else if (k === 'End') go(rows.length - 1);
+    else if (k === 'PageDown') go(i + 10);
+    else if (k === 'PageUp') go(i - 10);
+    else if (!onRow) return;
+    else if (k === 'Enter' && row && !ctrl) openRow(row);
+    else if (k === ' ' && row && !t.matches('.pick')) {
+      if (e.shiftKey && anchor) selectRange(anchor, row.key);
+      else toggleSel(row.key);
+    } else if (k === 'a' && ctrl) rows.forEach((r) => selected.add(r.key));
+    else if (k === 'Escape' && (selected.size || clip)) {
+      if (selected.size) selected.clear();
+      else clip = null;
+    } else if (k === 'Delete' && targets().length) removeRows(targets());
+    else if (k === 'F2' && row) renameRow(row);
+    else if (k === 'Backspace' && here && !searching && view === 'sops') enterFolder(parents.get(here) ?? null, 'f:' + here);
+    else if (k === 'x' && ctrl && view === 'sops' && targets().length) cut(targets());
+    else if ((k === 'ContextMenu' || (k === 'F10' && e.shiftKey)) && row) {
+      const r = listEl.querySelector(`[data-key="${CSS.escape(row.key)}"] .main`).getBoundingClientRect();
+      showRowMenu(r.left + 24, r.bottom - 4, row);
+    } else return;
+    e.preventDefault();
+    e.stopPropagation();
+  }
+
+  /** Pohon folder: ↑/↓ berpindah folder, → membuka cabang atau masuk ke subfolder, ← menutup cabang atau naik ke induk. */
+  function treeKey(e) {
+    const btns = [...treeEl.querySelectorAll('.tname')];
+    const i = btns.indexOf(document.activeElement);
+    if (i < 0) return;
+    const idOf = (b) => b.closest('[data-id]').dataset.id || null;
+    const id = idOf(btns[i]);
+    const go = (b) => {
+      if (!b) return;
+      b.focus();
+      select(idOf(b));
+    };
+    const kids = id ? childrenOf(id).length : 1;
+    if (e.key === 'ArrowDown') go(btns[i + 1]);
+    else if (e.key === 'ArrowUp') go(btns[i - 1]);
+    else if (e.key === 'Home') go(btns[0]);
+    else if (e.key === 'End') go(btns.at(-1));
+    else if (e.key === 'ArrowRight') {
+      if (id && kids && !expanded.has(id)) expanded.add(id);
+      else if (kids) go(btns[i + 1]);
+    } else if (e.key === 'ArrowLeft') {
+      if (id && kids && expanded.has(id)) expanded.delete(id);
+      else if (id) go(treeEl.querySelector(`[data-id="${CSS.escape(parents.get(id) ?? '')}"] .tname`));
+    } else if (e.key === 'F2' && id && canEdit(byId.get(id))) renameFolder(byId.get(id));
+    else if (e.key === 'Delete' && id && canManage(byId.get(id))) removeFolder(byId.get(id));
+    else return;
+    e.preventDefault();
+  }
+
+  /** Pintasan yang berlaku di seluruh panel (bukan saat mengetik). */
+  function panelKey(e) {
+    if (!open || !active || faculty.status !== 'in' || moving || accessTarget || menu) return;
+    // Hanya bila dialog Pustaka yang teratas (bukan saat ada dialog lain di atasnya).
+    if ([...document.querySelectorAll('dialog[open]')].filter((d) => d.matches(':modal')).at(-1) !== host) return;
+    const t = e.target;
+    const typing = t.matches?.('input:not(.pick), textarea, select, [contenteditable]');
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (ctrl && e.key === 'f' && view !== 'admin') {
+      search?.focus();
+      search?.select();
+    } else if (typing) return;
+    else if (ctrl && e.key === 'z' && !e.shiftKey) {
+      if (!undoLast()) return;
+    } else if (ctrl && e.key === 'v' && clip && view === 'sops' && !searching) paste();
+    else return;
+    e.preventDefault();
+  }
 
   function select(id) {
     view = 'sops';
@@ -241,43 +460,119 @@
 
   function submitMove(e) {
     e.preventDefault();
-    const { item, isFolder, target } = moving;
+    const { entries, target } = moving;
     moving = null;
-    moveTo(item, isFolder, target);
+    moveMany(entries, target);
   }
-  function moveTo(item, isFolder, target) {
+
+  // ---- Entri: { key, item, isFolder }. key 'f:<id>' untuk folder, 's:<id>' untuk RPS. ----
+  const entryOf = (item, isFolder) => ({ key: (isFolder ? 'f:' : 's:') + item.id, item, isFolder });
+  const parentOf = (d) => (d.isFolder ? (parents.get(d.item.id) ?? null) : folderOf(d.item));
+  const nameOf = (d) => (d.isFolder ? d.item.name : titleOf(d.item));
+  const countText = (list) => (list.length === 1 ? `"${nameOf(list[0])}"` : `${list.length} item`);
+  /** Entri dengan data terbaru (daftar bisa sudah dimuat ulang); yang sudah tidak ada dibuang. */
+  function fresh(list) {
+    return list.map((d) => ({ ...d, item: d.isFolder ? byId.get(d.item.id) : live.find((s) => s.id === d.item.id) })).filter((d) => d.item);
+  }
+  /** Folder di `list` tidak boleh dipindahkan ke dirinya sendiri atau subfoldernya. */
+  const insideMoved = (list, target) => !!target && list.some((d) => d.isFolder && pathOf(target).some((a) => a.id === d.item.id));
+
+  /** Memindahkan beberapa item ke `target` (null = Utama). Hasilnya bisa diurungkan dari pesan yang muncul. */
+  async function moveMany(list, target) {
+    const todo = fresh(list).filter((d) => parentOf(d) !== target && canManage(d.item));
+    if (insideMoved(todo, target)) return ui.alert('Folder tidak bisa dipindahkan ke dalam dirinya sendiri atau subfoldernya.');
+    const names = new Set();
+    const clash = [];
+    const go = todo.filter((d) => {
+      if (!d.isFolder) return true;
+      const k = d.item.name.toLowerCase();
+      if (nameTaken(d.item.name, target, d.item.id) || names.has(k)) return !clash.push(d.item.name);
+      return names.add(k);
+    });
     const dest = byId.get(target) ?? null;
-    if (isFolder) {
-      if (target === parents.get(item.id)) return;
-      if (nameTaken(item.name, target, item.id)) return ui.alert(takenMessage(item.name));
+    const done = [];
+    let err;
+    if (go.length) {
       if (target) expanded.add(target);
-      act(() => F.moveFolder(item, dest), 'Folder dipindahkan');
-    } else if (target !== folderOf(item)) {
-      act(() => F.moveSop(item, dest), 'RPS dipindahkan');
+      try {
+        for (const d of go) {
+          const from = parentOf(d);
+          await (d.isFolder ? F.moveFolder(d.item, dest) : F.moveSop(d.item, dest));
+          done.push({ ...d, from });
+        }
+      } catch (e) {
+        err = e;
+      }
+      selected.clear();
+      await refresh();
     }
+    const problems = [err?.message, clash.length && `Tidak dipindahkan karena sudah ada folder bernama ${clash.map((n) => `"${n}"`).join(', ')} di tujuan.`].filter(Boolean);
+    if (problems.length) ui.alert(problems.join('\n\n'));
+    if (done.length) offerUndo(`${countText(done)} dipindahkan ke ${dest?.name ?? 'Utama'}`, () => undoMove(done));
+  }
+  function undoMove(done) {
+    act(async () => {
+      for (const d of [...done].reverse()) {
+        const back = byId.get(d.from) ?? null;
+        await (d.isFolder ? F.moveFolder(d.item, back) : F.moveSop(d.item, back));
+      }
+    }, 'Pemindahan dibatalkan');
+  }
+
+  // ---- Urungkan (tombol di pesan atau Ctrl+Z selama pesannya masih tampil) ----
+  let undoFn = null;
+  let undoAt = 0;
+  function offerUndo(msg, fn) {
+    let used = false;
+    const run = () => {
+      if (used) return;
+      used = true;
+      undoFn = null;
+      fn();
+    };
+    undoFn = run;
+    undoAt = Date.now();
+    onnotify(msg, { label: 'Urungkan', run });
+  }
+  function undoLast() {
+    if (!undoFn || Date.now() - undoAt > 8000) return false;
+    onnotify('');
+    undoFn();
+    return true;
   }
 
   // ---- Seret dan lepas ----
-  // Yang bisa diseret: RPS dan folder yang boleh dipindahkan (pemilik dan admin). Tempat lepas: folder di pohon,
-  // breadcrumb, folder di hasil pencarian, dan area daftar (folder yang sedang dibuka).
+  // Yang bisa diseret: RPS dan folder yang boleh dipindahkan (pemilik dan admin). Bila yang diseret termasuk pilihan,
+  // semua yang dipilih ikut. Tempat lepas: folder di pohon, breadcrumb, folder di daftar, dan area daftar.
   // Berkas dari luar (ZIP berisi .rps, .rps, .json, PDF hasil ekspor) juga bisa dilepas ke tempat yang sama: diimpor.
-  let drag = $state(null); // { item, isFolder }
+  let drag = $state(null); // { entries }
   let dropAt = $state(undefined); // id folder yang sedang disorot; null = Utama
   let hoverTimer;
-  const parentOf = (d) => (d.isFolder ? (parents.get(d.item.id) ?? null) : folderOf(d.item));
   const fileDrag = (e) => !drag && !!e.dataTransfer?.types.includes('Files');
   function canDrop(target, files = false) {
     if (files) return !importing && canAdd(target);
-    if (!drag || target === parentOf(drag) || !canAdd(target)) return false;
-    return !(drag.isFolder && target && pathOf(target).some((a) => a.id === drag.item.id));
+    if (!drag || !canAdd(target) || drag.entries.every((d) => parentOf(d) === target)) return false;
+    return !insideMoved(drag.entries, target);
   }
+  const dragged = (id) => !!drag?.entries.some((d) => d.item.id === id) || !!clip?.some((d) => d.item.id === id);
   function dragStart(e, item, isFolder) {
-    if (!canManage(item)) return e.preventDefault();
+    const own = entryOf(item, isFolder);
+    const entries = (selected.has(own.key) ? selRows : [own]).filter((d) => canManage(d.item));
+    if (!entries.length) return e.preventDefault();
     e.stopPropagation();
     menu = null;
-    drag = { item, isFolder };
+    drag = { entries };
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', isFolder ? item.name : titleOf(item));
+    e.dataTransfer.setData('text/plain', entries.map(nameOf).join('\n'));
+    if (entries.length > 1) {
+      // Gambar seret berisi jumlah item. Ditempel di dialog karena isi di bawah dialog modal tidak digambar.
+      const ghost = document.createElement('div');
+      ghost.textContent = `${entries.length} item`;
+      ghost.style.cssText = 'position:fixed;top:-100px;left:0;padding:4px 10px;border-radius:6px;background:#1f4e8c;color:#fff;font:600 13px system-ui';
+      (host ?? document.body).appendChild(ghost);
+      e.dataTransfer.setDragImage(ghost, -8, -8);
+      setTimeout(() => ghost.remove());
+    }
   }
   function dragOver(e, target) {
     const files = fileDrag(e);
@@ -312,7 +607,7 @@
     if (files) {
       if (ok) importFiles([...e.dataTransfer.files], target);
       else if (!importing) ui.alert(noAddTip);
-    } else if (d && ok) moveTo(d.item, d.isFolder, target);
+    } else if (d && ok) moveMany(d.entries, target);
   }
   function dragEnd() {
     clearTimeout(hoverTimer);
@@ -443,22 +738,85 @@
     act(async () => onrenamed(s.id, await F.renameSop(s.id, name)), 'Nama RPS diubah');
   }
 
-  function moveToBin(s) {
+  const moveToBin = (s) => deleteMany([entryOf(s, false)]);
+
+  /**
+   * Menghapus beberapa item. RPS masuk Recycle bin tanpa konfirmasi dan bisa diurungkan dari pesan yang muncul.
+   * Folder harus kosong (isinya boleh ikut dihapus bersamanya), dihapus permanen, jadi diminta konfirmasi dulu.
+   */
+  async function deleteMany(list) {
+    list = fresh(list).filter((d) => canManage(d.item));
+    if (!list.length) return;
+    const sops = list.filter((d) => !d.isFolder).map((d) => d.item);
+    const dirs = list.filter((d) => d.isFolder).map((d) => d.item);
+    if (dirs.length) {
+      const gone = new Set(list.map((d) => d.item.id));
+      const full = dirs.filter((f) => childrenOf(f.id).some((c) => !gone.has(c.id)) || live.some((s) => folderOf(s) === f.id && !gone.has(s.id)));
+      if (full.length) {
+        const what = full.length === 1 ? `Folder "${full[0].name}" masih` : `${full.length} folder masih`;
+        return ui.alert(`${what} berisi item yang tidak ikut dihapus. Pindahkan isinya dulu, atau pilih isinya juga. RPS milik orang lain hanya bisa dipindahkan oleh pemiliknya atau admin.`, { title: 'Folder belum kosong' });
+      }
+      const what = [dirs.length === 1 ? `folder "${dirs[0].name}"` : `${dirs.length} folder`, sops.length && `${sops.length} RPS`].filter(Boolean).join(' dan ');
+      const note = sops.length ? '\n\nSOP masuk Recycle bin dan bisa dikembalikan, tetapi folder yang dihapus tidak bisa dikembalikan.' : '';
+      if (!(await ui.confirm(`Hapus ${what}?${note}`, { ok: 'Hapus', danger: true }))) return;
+    }
+    const done = [];
+    let removed = 0;
+    let err;
+    try {
+      for (const s of sops) {
+        await F.moveToBin(s.id);
+        done.push({ s, relink: onbinned(s.id) });
+      }
+      // Subfolder lebih dulu, baru induknya.
+      for (const f of dirs.sort((a, b) => pathOf(b.id).length - pathOf(a.id).length)) {
+        if (folderId === f.id) folderId = parents.get(f.id) ?? null;
+        await F.deleteFolder(f.id);
+        removed++;
+      }
+    } catch (e) {
+      err = e;
+    }
+    selected.clear();
+    await refresh();
+    if (err) ui.alert(err.message);
+    if (done.length) {
+      const kept = done.some((d) => d.relink) ? '. Perubahan yang belum tersimpan masih ada di tabnya.' : '';
+      const sopText = done.length === 1 ? `"${titleOf(done[0].s)}"` : `${done.length} RPS`;
+      const dirText = removed ? ` dan ${removed} folder dihapus` : '';
+      offerUndo(`${sopText} dipindahkan ke Recycle bin${dirText}${kept}`, () => undoBin(done));
+    } else if (removed) onnotify(removed === 1 ? 'Folder dihapus' : `${removed} folder dihapus`);
+  }
+  function undoBin(done) {
     act(async () => {
-      await F.moveToBin(s.id);
-      const kept = onbinned(s.id);
-      onnotify(kept ? 'Dipindahkan ke Recycle bin. Perubahan yang belum tersimpan masih ada di tabnya.' : 'Dipindahkan ke Recycle bin');
-    });
+      for (const { s, relink } of done) {
+        await F.restoreFromBin(s.id);
+        if (relink) relink();
+      }
+    }, done.length === 1 ? `"${titleOf(done[0].s)}" dikembalikan` : `${done.length} RPS dikembalikan`);
   }
 
   const duplicate = (s) => act(() => F.duplicateSop(s), 'Salinan dibuat');
-  const moveSop = (s) => (moving = { item: s, isFolder: false, target: folderOf(s) });
-  const moveFolder = (f) => (moving = { item: f, isFolder: true, target: parents.get(f.id) ?? null });
-  const restoreFromBin = (s) => act(() => F.restoreFromBin(s.id), 'RPS dipulihkan');
+  const startMove = (list) => list.length && (moving = { entries: list, target: parentOf(list[0]) });
+  const moveSop = (s) => startMove([entryOf(s, false)]);
+  const moveFolder = (f) => startMove([entryOf(f, true)]);
+  const restoreFromBin = (s) => restoreMany([s]);
+  function restoreMany(list) {
+    selected.clear();
+    act(async () => {
+      for (const s of list) await F.restoreFromBin(s.id);
+    }, list.length === 1 ? 'RPS dipulihkan' : `${list.length} RPS dipulihkan`);
+  }
 
-  async function purge(s) {
-    const msg = `Hapus "${titleOf(s)}" secara permanen?\n\nSeluruh riwayat versinya, termasuk suntingan orang lain, ikut terhapus. Tindakan ini tidak bisa dibatalkan.`;
-    if (await ui.confirm(msg, { title: 'Hapus permanen', ok: 'Hapus permanen', danger: true })) act(() => F.purgeSop(s), 'Dihapus permanen');
+  const purge = (s) => purgeMany([s]);
+  async function purgeMany(list) {
+    const what = list.length === 1 ? `"${titleOf(list[0])}"` : `${list.length} RPS`;
+    const msg = `Hapus ${what} secara permanen?\n\nSeluruh riwayat versinya, termasuk suntingan orang lain, ikut terhapus. Tindakan ini tidak bisa dibatalkan.`;
+    if (!(await ui.confirm(msg, { title: 'Hapus permanen', ok: 'Hapus permanen', danger: true }))) return;
+    selected.clear();
+    act(async () => {
+      for (const s of list) await F.purgeSop(s);
+    }, 'Dihapus permanen');
   }
 
   async function toggleHistory(s) {
@@ -504,29 +862,64 @@
     e.stopPropagation();
     menu = { x: e.clientX, y: e.clientY, items };
   }
+  /** Menu baris: bila baris itu termasuk pilihan beberapa item, menu berlaku untuk semua yang dipilih. */
+  function showRowMenu(x, y, row) {
+    cursor = row.key;
+    const many = selected.has(row.key) && selRows.length > 1;
+    const items = view === 'bin' ? (many ? binBatchMenu(selRows) : binMenu(row.item)) : many ? batchMenu(selRows) : row.isFolder ? folderMenu(row.item) : sopMenu(row.item);
+    menu = { x, y, items };
+  }
+  function rowMenu(e, row) {
+    e.preventDefault();
+    e.stopPropagation();
+    showRowMenu(e.clientX, e.clientY, row);
+  }
+  function batchMenu(list) {
+    const own = list.filter((d) => canManage(d.item));
+    const n = own.length;
+    return [
+      { head: `${list.length} item dipilih` },
+      { label: `Pindahkan ${n} item…`, icon: 'move', run: () => startMove(own), disabled: !n },
+      { label: 'Potong', icon: 'cut', hint: 'Ctrl+X', run: () => cut(own), disabled: !n },
+      { sep: true },
+      { label: `Hapus ${n} item`, icon: 'trash', hint: 'Del', run: () => deleteMany(own), danger: true, disabled: !n },
+      { sep: true },
+      { label: 'Batal pilih', icon: 'x', hint: 'Esc', run: () => selected.clear() }
+    ];
+  }
+  const binBatchMenu = (list) => [
+    { head: `${list.length} RPS dipilih` },
+    { label: `Pulihkan ${list.length} RPS`, icon: 'restore', run: () => restoreMany(list.map((d) => d.item)) },
+    { sep: true },
+    { label: `Hapus permanen ${list.length} RPS`, icon: 'trash', hint: 'Del', run: () => purgeMany(list.map((d) => d.item)), danger: true },
+    { sep: true },
+    { label: 'Batal pilih', icon: 'x', hint: 'Esc', run: () => selected.clear() }
+  ];
   function hereItems(id) {
     const add = canAdd(id);
     return [
-      { label: 'RPS baru di sini', run: () => newSop(id), disabled: !add },
-      { label: 'Folder baru di sini', run: () => newFolder(id), disabled: !add },
-      { label: 'Unggah dokumen ini ke sini', run: () => onupload(id), disabled: !add || !cansave },
-      { label: 'Unggah berkas .rps atau .zip ke sini…', run: () => pickImport(id), disabled: !add || !!importing }
+      ...(clip ? [{ label: `Tempel ${countText(clip)} di sini`, icon: 'paste', hint: 'Ctrl+V', run: () => paste(id), disabled: !add }, { sep: true }] : []),
+      { label: 'RPS baru di sini', icon: 'filePlus', run: () => newSop(id), disabled: !add },
+      { label: 'Folder baru di sini', icon: 'folderPlus', run: () => newFolder(id), disabled: !add },
+      { label: 'Unggah dokumen ini ke sini', icon: 'upload', run: () => onupload(id), disabled: !add || !cansave },
+      { label: 'Unggah berkas .rps atau .zip ke sini…', icon: 'import', run: () => pickImport(id), disabled: !add || !!importing }
     ];
   }
   function folderMenu(f) {
     const manage = canManage(f);
     return [
-      { label: 'Buka', run: () => select(f.id) },
+      { label: 'Buka', icon: 'folder', hint: 'Enter', run: () => select(f.id) },
       { sep: true },
       ...hereItems(f.id),
       { sep: true },
-      { label: accessTip(f), run: () => openAccess('folders', f) },
-      ...(canEdit(f) ? [{ label: 'Ubah nama', run: () => renameFolder(f) }] : []),
+      { label: accessTip(f), icon: 'users', run: () => openAccess('folders', f) },
+      ...(canEdit(f) ? [{ label: 'Ubah nama', icon: 'pencil', hint: 'F2', run: () => renameFolder(f) }] : []),
       ...(manage
         ? [
-            { label: 'Pindahkan', run: () => moveFolder(f) },
+            { label: 'Pindahkan', icon: 'move', run: () => moveFolder(f) },
+            { label: 'Potong', icon: 'cut', hint: 'Ctrl+X', run: () => cut([entryOf(f, true)]) },
             { sep: true },
-            { label: 'Hapus', run: () => removeFolder(f), danger: true }
+            { label: 'Hapus', icon: 'trash', hint: 'Del', run: () => removeFolder(f), danger: true }
           ]
         : [])
     ];
@@ -534,25 +927,26 @@
   function sopMenu(s) {
     const manage = canManage(s);
     return [
-      { label: 'Buka', run: () => openSop(s) },
+      { label: 'Buka', icon: 'open', hint: 'Enter', run: () => openSop(s) },
       { sep: true },
-      { label: 'Duplikat', run: () => duplicate(s) },
-      { label: 'Riwayat', run: () => toggleHistory(s) },
-      { label: accessTip(s), run: () => openAccess('sops', s) },
-      ...(canEdit(s) ? [{ label: 'Ubah nama', run: () => rename(s) }] : []),
+      { label: 'Duplikat', icon: 'copy', run: () => duplicate(s) },
+      { label: 'Riwayat', icon: 'history', run: () => toggleHistory(s) },
+      { label: accessTip(s), icon: 'users', run: () => openAccess('sops', s) },
+      ...(canEdit(s) ? [{ label: 'Ubah nama', icon: 'pencil', hint: 'F2', run: () => rename(s) }] : []),
       ...(manage
         ? [
-            { label: 'Pindahkan', run: () => moveSop(s) },
+            { label: 'Pindahkan', icon: 'move', run: () => moveSop(s) },
+            { label: 'Potong', icon: 'cut', hint: 'Ctrl+X', run: () => cut([entryOf(s, false)]) },
             { sep: true },
-            { label: 'Hapus', run: () => moveToBin(s), danger: true }
+            { label: 'Hapus', icon: 'trash', hint: 'Del', run: () => moveToBin(s), danger: true }
           ]
         : [])
     ];
   }
   const binMenu = (s) => [
-    { label: 'Pulihkan', run: () => restoreFromBin(s) },
+    { label: 'Pulihkan', icon: 'restore', run: () => restoreFromBin(s) },
     { sep: true },
-    { label: 'Hapus permanen', run: () => purge(s), danger: true }
+    { label: 'Hapus permanen', icon: 'trash', hint: 'Del', run: () => purge(s), danger: true }
   ];
 
   const noAddTip = 'Hanya pemilik folder ini yang bisa menambah isinya';
@@ -636,11 +1030,34 @@
   </button>
 {/snippet}
 
+{#snippet pick(row)}
+  <input type="checkbox" class="pick" tabindex="-1" checked={selected.has(row.key)} aria-label={`Pilih ${nameOf(row)}`} onclick={(e) => pickClick(e, row)} />
+{/snippet}
+
+{#snippet selBar()}
+  {#if selRows.length}
+    {@const own = selRows.filter((d) => canManage(d.item))}
+    <div class="selbar" role="toolbar" aria-label="Tindakan untuk yang dipilih">
+      <strong>{selRows.length} dipilih</strong>
+      {#if view === 'bin'}
+        <button type="button" class="btn" onclick={() => restoreMany(selRows.map((d) => d.item))}><Icon name="restore" size={14} /> Pulihkan</button>
+        <button type="button" class="btn danger" onclick={() => purgeMany(selRows.map((d) => d.item))}><Icon name="trash" size={14} /> Hapus permanen</button>
+      {:else}
+        <button type="button" class="btn" disabled={!own.length} onclick={() => startMove(own)}><Icon name="move" size={14} /> Pindahkan</button>
+        <button type="button" class="btn danger" disabled={!own.length} onclick={() => deleteMany(own)}><Icon name="trash" size={14} /> Hapus</button>
+      {/if}
+      <span class="grow"></span>
+      <button type="button" class="link" onclick={() => rows.forEach((r) => selected.add(r.key))}>Pilih semua</button>
+      <button type="button" class="link" onclick={() => selected.clear()}>Batal pilih</button>
+    </div>
+  {/if}
+{/snippet}
+
 {#snippet node(f, depth)}
   {@const kids = childrenOf(f.id)}
   {@const opened = expanded.has(f.id)}
   <li role="treeitem" aria-selected={view === 'sops' && here === f.id} aria-expanded={kids.length ? opened : undefined}>
-    <div class="tn" class:sel={view === 'sops' && here === f.id} class:drop={dropAt === f.id} class:dragging={drag?.item === f} style:padding-left="{depth * 0.9 + 0.2}rem" role="presentation" draggable={canManage(f)} ondragstart={(e) => dragStart(e, f, true)} ondragend={dragEnd} {...dropzone(f.id)} oncontextmenu={(e) => openMenu(e, folderMenu(f))}>
+    <div class="tn" data-id={f.id} class:sel={view === 'sops' && here === f.id} class:drop={dropAt === f.id} class:dragging={dragged(f.id)} style:padding-left="{depth * 0.9 + 0.2}rem" role="presentation" draggable={canManage(f)} ondragstart={(e) => dragStart(e, f, true)} ondragend={dragEnd} {...dropzone(f.id)} oncontextmenu={(e) => openMenu(e, folderMenu(f))}>
       {#if kids.length}
         <button type="button" class="chev" class:open={opened} aria-label={opened ? `Tutup ${f.name}` : `Buka ${f.name}`} onclick={() => toggle(f.id)}><Icon name="chevron" size={13} /></button>
       {:else}
@@ -663,7 +1080,7 @@
   <header>
     {@render tabs()}
     {#if faculty.status === 'in' && view !== 'admin'}
-      <input class="search" type="search" bind:value={query} placeholder="Cari mata kuliah, kode, pembuat, dosen, CPL/CPMK, atau materi…" />
+      <input class="search" type="search" bind:this={search} bind:value={query} onkeydown={(e) => e.key === 'ArrowDown' && rows.length && (e.preventDefault(), focusRow(rows[0].key))} placeholder="Cari mata kuliah, kode, pembuat, dosen, CPL/CPMK, atau materi…" />
     {:else}
       <span class="grow"></span>
     {/if}
@@ -686,9 +1103,9 @@
         <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
         <div class="split" role="separator" aria-orientation="vertical" aria-label="Lebar daftar folder" aria-valuenow={treeW} aria-valuemin={TREE_MIN} tabindex="0" title="Geser untuk mengubah lebar (klik dua kali: lebar awal)" onpointerdown={splitDown} onkeydown={splitKey} ondblclick={() => setTree(TREE_DEFAULT)}></div>
         <div class="tree" role="presentation" oncontextmenu={(e) => openMenu(e, hereItems(null))}>
-          <ul role="tree" aria-label="Folder">
+          <ul role="tree" aria-label="Folder" bind:this={treeEl} onkeydown={treeKey}>
             <li role="treeitem" aria-selected={view === 'sops' && !here}>
-              <div class="tn" class:sel={view === 'sops' && !here} class:drop={dropAt === null} style:padding-left="0.2rem" role="presentation" {...dropzone(null)}>
+              <div class="tn" data-id="" class:sel={view === 'sops' && !here} class:drop={dropAt === null} style:padding-left="0.2rem" role="presentation" {...dropzone(null)}>
                 <span class="chev none"></span>
                 <button type="button" class="tname" onclick={() => select(null)}>
                   <Icon name="folder" size={15} />
@@ -721,6 +1138,7 @@
                 {/each}
               </nav>
             {/if}
+            <SortSelect />
             {#if here && !searching}
               {@render ib('users', accessTip(byId.get(here)), () => openAccess('folders', byId.get(here)))}
             {/if}
@@ -739,22 +1157,30 @@
           {#if !drag && dropAt !== undefined}
             <p class="filehint" aria-hidden="true">Lepaskan berkas .rps atau .zip untuk mengunggah ke {dropAt ? byId.get(dropAt)?.name : 'Utama'}</p>
           {/if}
-          <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-          <ul class="list" class:drop={!searching && dropAt !== undefined && dropAt === here} oncontextmenu={(e) => openMenu(e, hereItems(here))} {...(searching ? {} : dropzone(here))}>
+          {@render selBar()}
+          <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+          <ul class="list" class:selecting={selected.size > 0} class:drop={!searching && dropAt !== undefined && dropAt === here} tabindex="-1" bind:this={listEl} onkeydown={listKey} oncontextmenu={(e) => openMenu(e, hereItems(here))} {...(searching ? {} : dropzone(here))}>
             {#each shownFolders as f (f.id)}
               {@const parent = parents.get(f.id)}
-              <li class:drop={dropAt === f.id} class:dragging={drag?.item === f} draggable={canManage(f)} ondragstart={(e) => dragStart(e, f, true)} ondragend={dragEnd} {...dropzone(f.id)} oncontextmenu={(e) => openMenu(e, folderMenu(f))}>
-                <button class="main" onclick={() => select(f.id)}>
+              {@const row = entryOf(f, true)}
+              <li data-key={row.key} class:sel={selected.has(row.key)} class:drop={dropAt === f.id} class:dragging={dragged(f.id)} draggable={canManage(f)} ondragstart={(e) => dragStart(e, f, true)} ondragend={dragEnd} {...dropzone(f.id)} oncontextmenu={(e) => rowMenu(e, row)}>
+                {@render pick(row)}
+                <button class="main" onclick={(e) => rowClick(e, row, () => enterFolder(f.id))} onfocus={() => (cursor = row.key)}>
                   <strong><Icon name="folder" size={15} /> {f.name} <em class:shared={F.isShared(f)}>{accessLabel(f)}</em></strong>
                   <small>{[searching && parent && `di ${pathText(parent)}`, folderInfo(f), `dibuat ${f.createdBy === faculty.user.uid ? 'Anda' : f.createdByName}`].filter(Boolean).join(' · ')}</small>
                 </button>
+                <span class="acts" role="group" aria-label="Tindakan folder">
+                  {@render ib('users', accessTip(f), () => openAccess('folders', f))}
+                </span>
               </li>
             {/each}
             {#each shownLive as s (s.id)}
               {@const manage = canManage(s)}
               {@const editors = namesEditing(s)}
-              <li class:dragging={drag?.item === s} draggable={manage} ondragstart={(e) => dragStart(e, s, false)} ondragend={dragEnd} oncontextmenu={(e) => openMenu(e, sopMenu(s))}>
-                <button class="main" onclick={() => openSop(s)}>
+              {@const row = entryOf(s, false)}
+              <li data-key={row.key} class:sel={selected.has(row.key)} class:dragging={dragged(s.id)} draggable={manage} ondragstart={(e) => dragStart(e, s, false)} ondragend={dragEnd} oncontextmenu={(e) => rowMenu(e, row)}>
+                {@render pick(row)}
+                <button class="main" onclick={(e) => rowClick(e, row, () => openSop(s))} onfocus={() => (cursor = row.key)}>
                   <strong>
                     <Icon name="file" size={15} />
                     {titleOf(s)}
@@ -802,10 +1228,15 @@
             {/if}
           </ul>
         {:else if view === 'bin'}
-          <ul class="list">
+          {@render selBar()}
+          <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+          <ul class="list" class:selecting={selected.size > 0} tabindex="-1" bind:this={listEl} onkeydown={listKey}>
             {#each shownBin as s (s.id)}
-              <li oncontextmenu={(e) => openMenu(e, binMenu(s))}>
-                <div class="main static">
+              {@const row = entryOf(s, false)}
+              <li data-key={row.key} class:sel={selected.has(row.key)} oncontextmenu={(e) => rowMenu(e, row)}>
+                {@render pick(row)}
+                <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+                <div class="main static" tabindex="0" onclick={(e) => rowClick(e, row, () => {})} onfocus={() => (cursor = row.key)}>
                   <strong><Icon name="file" size={15} /> {titleOf(s)}</strong>
                   <small>{[s.nomor, `dibuat ${s.createdBy === faculty.user.uid ? 'Anda' : s.createdByName}`, `dihapus ${when(s.deletedAt)}`, size(s.totalBytes)].filter(Boolean).join(' · ')}</small>
                 </div>
@@ -930,13 +1361,14 @@
     accept=".zip,.rps,.json,.pdf,application/zip,application/json,application/pdf"
     onchange={(e) => importFiles([...e.currentTarget.files], e.currentTarget.dataset.target || null)}
   />
+  <svelte:window onkeydown={panelKey} />
   {#if menu}<ContextMenu x={menu.x} y={menu.y} items={menu.items} {host} onclose={() => (menu = null)} />{/if}
 
-<dialog bind:this={moveDialog} class="dialog small-dialog" onclose={() => (moving = null)}>
+<dialog bind:this={moveDialog} class="dialog small-dialog" use:dismiss onclose={() => (moving = null)}>
   {#if moving}
     <form onsubmit={submitMove}>
       <h2>Pindahkan</h2>
-      <p class="muted moved">{moving.isFolder ? moving.item.name : titleOf(moving.item)}</p>
+      <p class="muted moved">{moving.entries.length === 1 ? nameOf(moving.entries[0]) : `${moving.entries.length} item`}</p>
       <label class="move">
         <span>Ke folder</span>
         <select bind:value={moving.target}>
@@ -946,7 +1378,7 @@
           {/each}
         </select>
       </label>
-      {#if !moving.item.custom}<small class="muted">Hak aksesnya akan mengikuti folder tujuan.</small>{/if}
+      {#if moving.entries.some((d) => !d.item.custom)}<small class="muted">Hak aksesnya akan mengikuti folder tujuan.</small>{/if}
       <footer class="end">
         <button type="button" class="btn" onclick={() => (moving = null)}>Batal</button>
         <button class="btn primary">Pindahkan</button>
@@ -1329,9 +1761,83 @@
     display: inline-flex;
     flex: none;
   }
+  /* Tombol tindakan hanya tampil pada baris yang disorot mouse atau difokuskan keyboard, agar daftar panjang tidak
+     penuh tombol. Ruangnya tetap dipakai, jadi baris tidak bergeser. Layar sentuh (tanpa hover) selalu menampilkannya. */
+  @media (hover: hover) {
+    .list > li .acts {
+      opacity: 0;
+      transition: opacity 0.12s;
+    }
+    .list > li:hover .acts,
+    .list > li:focus-within .acts,
+    .list > li .acts:has(.on) {
+      opacity: 1;
+    }
+  }
   .btn:disabled {
     opacity: 0.45;
     cursor: default;
+  }
+  /* ---- Pilihan ---- */
+  .list:focus {
+    outline: none;
+  }
+  .list > li.sel,
+  .list > li.sel:hover {
+    background: var(--accent-soft);
+  }
+  .list > li:has(> .main:focus-visible) {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+  }
+  .main:focus-visible {
+    outline: none;
+  }
+  .pick {
+    flex: none;
+    width: 15px;
+    height: 15px;
+    margin: 0 0 0 0.1rem;
+    accent-color: var(--accent);
+    cursor: pointer;
+  }
+  @media (hover: hover) {
+    .list:not(.selecting) > li:not(:hover) .pick {
+      opacity: 0;
+    }
+  }
+  .selbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    margin-bottom: 0.35rem;
+    padding: 0.3rem 0.5rem;
+    border-radius: 8px;
+    background: var(--accent-soft);
+    font-size: 0.84rem;
+  }
+  .selbar strong {
+    color: var(--accent);
+    margin-right: 0.3rem;
+  }
+  .selbar .btn {
+    padding: 0.22rem 0.6rem;
+    font-size: 0.82rem;
+  }
+  .selbar .btn.danger {
+    color: var(--danger);
+  }
+  .selbar .link {
+    border: 0;
+    background: none;
+    padding: 0.2rem 0.3rem;
+    color: var(--accent);
+    font: inherit;
+    cursor: pointer;
+  }
+  .selbar .link:hover {
+    text-decoration: underline;
   }
   .history {
     flex-basis: 100%;

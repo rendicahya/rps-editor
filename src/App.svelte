@@ -15,6 +15,7 @@
   import PdfPreviewDialog from './lib/PdfPreviewDialog.svelte';
   import FindPanel from './lib/FindPanel.svelte';
   import CheckPanel from './lib/CheckPanel.svelte';
+  import ContextMenu from './lib/ContextMenu.svelte';
   import { checkDocument } from './lib/validate.js';
   import { connectHistory } from './lib/history.js';
   import LibraryDialog from './lib/LibraryDialog.svelte';
@@ -26,7 +27,7 @@
   import * as Faculty from './lib/faculty.svelte.js';
   import { faculty } from './lib/faculty.svelte.js';
 
-  let toast = $state('');
+  let toast = $state(null); // { msg, action, n }
   let toastTimer;
 
   const { needRefresh, offlineReady, updateServiceWorker } = useRegisterSW();
@@ -443,6 +444,55 @@
     }
   }
 
+  // ---- Menu klik kanan tab ----
+  let tabMenu = $state(null); // { x, y, items }
+  const tabJson = (id) => (id === tabs.active ? JSON.stringify(app.doc) : stash.get(id).json);
+
+  /** Menutup beberapa tab satu per satu; berhenti bila pengguna membatalkan salah satunya. */
+  async function closeTabs(ids) {
+    for (const id of ids) {
+      const tab = tabs.list.find((t) => t.id === id);
+      if (!tab) continue;
+      await closeTab(id);
+      if (tabs.list.includes(tab) && !empty) return;
+    }
+  }
+
+  function duplicateTab(id) {
+    const doc = parseDocumentText(tabJson(id));
+    switchTab(id);
+    addTab(doc);
+    notify('Tab diduplikat sebagai RPS baru');
+  }
+
+  function openTabMenu(e, t) {
+    e.preventDefault();
+    const i = tabs.list.indexOf(t);
+    const ids = tabs.list.map((x) => x.id);
+    const others = ids.filter((id) => id !== t.id);
+    const right = ids.slice(i + 1);
+    const inActive = (run) => () => {
+      switchTab(t.id);
+      run();
+    };
+    tabMenu = {
+      x: e.clientX,
+      y: e.clientY,
+      items: [
+        { head: tabTitle(t) },
+        { label: 'Simpan', icon: 'save', hint: 'Ctrl+S', run: inActive(quickSave) },
+        { label: 'Simpan sebagai berkas…', icon: 'download', hint: 'Ctrl+Shift+S', run: inActive(() => save(true)) },
+        { label: 'Duplikat tab', icon: 'copy', run: () => duplicateTab(t.id) },
+        { label: 'Tab baru', icon: 'filePlus', run: () => addTab(emptyDocument()) },
+        { sep: true },
+        { label: 'Tutup', icon: 'x', hint: 'Alt+W', run: () => closeTab(t.id) },
+        { label: 'Tutup tab lain', disabled: !others.length, run: () => closeTabs(others) },
+        { label: 'Tutup tab di sebelah kanan', disabled: !right.length, run: () => closeTabs(right) },
+        { label: 'Tutup semua tab', run: () => closeTabs([...others, t.id]) }
+      ]
+    };
+  }
+
   // Urutan tab bisa diubah dengan diseret; posisi berpindah langsung saat melewati tengah tab lain.
   let draggedTab = $state(null);
   function moveTab(id, overId, e) {
@@ -461,10 +511,25 @@
     persist(current);
   }
 
-  function notify(msg) {
-    toast = msg;
+  /** Pesan singkat di bawah layar. `action` ({ label, run }) memberi tombol, mis. Urungkan; pesannya bertahan lebih lama. */
+  function notify(msg, action = null) {
+    toast = msg ? { msg, action, n: (toast?.n ?? 0) + 1 } : null;
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => (toast = ''), 3000);
+    toastTimer = setTimeout(() => (toast = null), action ? 8000 : 3000);
+  }
+  function toastAct() {
+    const run = toast?.action?.run;
+    notify('');
+    run?.();
+  }
+  /** Saat dialog modal terbuka, isi di luarnya tidak bisa diklik: pesan ditempel di dialog teratas, kembali ke <body> bila dialog itu ditutup. */
+  function overTop(node) {
+    const host = [...document.querySelectorAll('dialog[open]')].filter((d) => d.matches(':modal')).at(-1);
+    if (!host) return;
+    const back = () => document.body.appendChild(node);
+    host.appendChild(node);
+    host.addEventListener('close', back);
+    return { destroy: () => (host.removeEventListener('close', back), node.remove()) };
   }
 
   // Dialog Pustaka, bertab Lokal dan Daring. Tab terakhir diingat di browser ini.
@@ -704,7 +769,7 @@
     }
   }
 
-  /** RPS dipindahkan ke Recycle bin dari dialog. Hasil: true bila tabnya dipertahankan karena belum tersimpan. */
+  /** RPS dipindahkan ke Recycle bin dari dialog. Bila tabnya dipertahankan karena belum tersimpan, hasilnya fungsi untuk menautkannya lagi (Urungkan); selain itu false. */
   function onFacultyBinned(id) {
     const t = tabs.list.find((x) => x.remote?.id === id);
     if (!t) return false;
@@ -714,9 +779,16 @@
       closeTab(t.id);
       return false;
     }
+    const remote = t.remote;
     Faculty.setEditing(id, false);
     t.remote = null;
-    return true;
+    // Urungkan: tab yang dipertahankan tertaut lagi ke RPS-nya.
+    return () => {
+      if (tabs.list.includes(t) && !t.remote) {
+        t.remote = remote;
+        syncEditing();
+      }
+    };
   }
 
   /** Tab tertaut ke `remote`, dan isi yang baru tersimpan tidak lagi dianggap perubahan. */
@@ -1045,6 +1117,7 @@
             e.stopPropagation();
           }}
           ondragend={endTabDrag}
+          oncontextmenu={(e) => openTabMenu(e, t)}
           onmousedown={(e) => e.button === 1 && e.preventDefault()}
           onauxclick={(e) => {
             if (e.button === 1) {
@@ -1155,6 +1228,7 @@
     onnotify={notify}
     onjump={(f) => jumpTo(f.ref)}
   />
+  {#if tabMenu}<ContextMenu x={tabMenu.x} y={tabMenu.y} items={tabMenu.items} onclose={() => (tabMenu = null)} />{/if}
   <CheckPanel bind:open={checkOpen} {issues} onjump={jumpTo} />
   <LibraryDialog
     bind:open={libraryOpen}
@@ -1192,7 +1266,14 @@
   <FacultyConflict info={conflict} onchoice={chooseConflict} />
   <CloseConfirm info={closeAsk} onchoice={chooseClose} />
 
-  {#if toast}<div class="toast" role="status">{toast}</div>{/if}
+  {#if toast}
+    {#key toast.n}
+      <div class="toast" role="status" use:overTop>
+        {toast.msg}
+        {#if toast.action}<button class="toast-act" onclick={toastAct}>{toast.action.label}</button>{/if}
+      </div>
+    {/key}
+  {/if}
   {#if dragging}<div class="dropzone">Lepaskan berkas .rps untuk membuka</div>{/if}
 </div>
 

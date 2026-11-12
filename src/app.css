@@ -587,6 +587,27 @@ button:disabled {
 }
 .toast {
   bottom: 4.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: calc(100vw - 2rem);
+  text-align: left;
+}
+.toast-act {
+  flex: none;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: #9cc3ff;
+  font: inherit;
+  font-weight: 600;
+  padding: 0.2rem 0.45rem;
+  margin: -0.2rem -0.4rem -0.2rem 0;
+  cursor: pointer;
+}
+.toast-act:hover,
+.toast-act:focus-visible {
+  background: rgb(255 255 255 / 0.12);
 }
 .dropzone {
   position: fixed;

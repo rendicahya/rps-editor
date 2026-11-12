@@ -1,5 +1,6 @@
 <script>
   import Preview from './Preview.svelte';
+  import { dismiss } from './dismiss.js';
 
   /** pdf: objek jsPDF hasil exportPdf; pages: tata letak (cadangan bila browser tak bisa menampilkan PDF). */
   let { pdf = $bindable(null), pages, filename, fontNote = '', ondownload } = $props();
@@ -45,7 +46,7 @@
   }
 </script>
 
-<dialog bind:this={dialog} class="dialog" onclose={() => (pdf = null)}>
+<dialog bind:this={dialog} class="dialog" use:dismiss onclose={() => (pdf = null)}>
   <header>
     <div>
       <h2>Pratinjau PDF</h2>

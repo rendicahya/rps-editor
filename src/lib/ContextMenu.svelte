@@ -1,5 +1,8 @@
 <script>
-  // Menu klik kanan. Item: { label, run, disabled, danger, checked, hint, title } | { sep: true } | { head }.
+  import Icon from './Icon.svelte';
+
+  // Menu klik kanan. Item: { label, icon, run, disabled, danger, checked, hint, title } | { sep: true } | { head }.
+  // `icon`: nama ikon di Icon.svelte. Item centang yang berikon ditandai dengan ikon yang disorot, bukan ✓.
   // Menu tidak mengambil fokus (isian yang diklik kanan tetap fokus dengan seleksinya), jadi navigasi
   // keyboard (↑/↓, Enter, Esc) ditangkap di window pada fase capture.
   // `host`: tempat menu ditempel. Di dalam <dialog> modal harus dialog itu sendiri, karena <body> ada di bawahnya.
@@ -88,7 +91,9 @@
         onpointerenter={() => (active = it.disabled ? -1 : i)}
         onclick={() => pick(it)}
       >
-        <span class="cm-check">{it.checked ? '✓' : ''}</span>
+        <span class="cm-check" class:on={it.icon && it.checked}>
+          {#if it.icon}<Icon name={it.icon} size={15} />{:else if it.checked}✓{/if}
+        </span>
         <span class="cm-label">{it.label}</span>
         {#if it.hint}<span class="cm-hint">{it.hint}</span>{/if}
       </button>
@@ -120,7 +125,7 @@
     border-top: 1px solid var(--line, #e3e7ee);
   }
   .ctx .cm-head {
-    padding: 5px 8px 3px 26px;
+    padding: 5px 8px 3px 30px;
     font-size: 11px;
     font-weight: 600;
     color: var(--muted, #6b7487);
@@ -164,9 +169,22 @@
     cursor: default;
   }
   .ctx .cm-check {
-    width: 16px;
+    width: 20px;
+    height: 20px;
     flex: none;
-    text-align: center;
+    display: grid;
+    place-items: center;
+    border-radius: 4px;
+    opacity: 0.85;
+  }
+  .ctx .cm-check.on {
+    background: color-mix(in srgb, var(--accent, #1f4e8c) 18%, transparent);
+    color: var(--accent, #1f4e8c);
+    opacity: 1;
+  }
+  .ctx button.active .cm-check.on {
+    background: rgb(255 255 255 / 0.22);
+    color: #fff;
   }
   .ctx .cm-label {
     flex: 1;

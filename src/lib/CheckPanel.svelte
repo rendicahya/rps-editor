@@ -7,15 +7,22 @@
   const count = (lv) => issues.filter((i) => i.level === lv).length;
   const shown = $derived(showInfo ? issues : issues.filter((i) => i.level !== 'info'));
 
+  let panel = $state();
   function onKey(e) {
     if (open && e.key === 'Escape' && !document.querySelector('dialog[open]')) open = false;
   }
+  // Klik di luar panel menutupnya. Tombol yang membuka panel diabaikan agar klik itu tidak menutup lalu membukanya lagi.
+  function onPointer(e) {
+    if (!open || !panel || panel.contains(e.target) || document.querySelector('dialog[open]')) return;
+    if (e.target.closest?.('.check-btn, button.dur')) return;
+    open = false;
+  }
 </script>
 
-<svelte:window onkeydown={onKey} />
+<svelte:window onkeydown={onKey} onpointerdown={onPointer} />
 
 {#if open}
-  <div class="check" role="dialog" aria-label="Periksa dokumen">
+  <div class="check" role="dialog" aria-label="Periksa dokumen" bind:this={panel}>
     <div class="head">
       <strong>Periksa dokumen</strong>
       <button class="icon" onclick={() => (open = false)} title="Tutup (Esc)">✕</button>

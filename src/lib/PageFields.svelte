@@ -268,17 +268,17 @@
       });
     }
     const out = [
-      { label: 'Potong', hint: 'Ctrl+X', disabled: !hasSel, run: exec('cut') },
-      { label: 'Salin', hint: 'Ctrl+C', disabled: !hasSel, run: exec('copy') },
-      { label: 'Tempel', hint: 'Ctrl+V', disabled: !navigator.clipboard?.readText, run: paste },
-      { label: 'Pilih semua', hint: 'Ctrl+A', run: () => (el.focus(), rich ? document.execCommand('selectAll') : el.select()) }
+      { label: 'Potong', icon: 'cut', hint: 'Ctrl+X', disabled: !hasSel, run: exec('cut') },
+      { label: 'Salin', icon: 'copy', hint: 'Ctrl+C', disabled: !hasSel, run: exec('copy') },
+      { label: 'Tempel', icon: 'paste', hint: 'Ctrl+V', disabled: !navigator.clipboard?.readText, run: paste },
+      { label: 'Pilih semua', icon: 'selectAll', hint: 'Ctrl+A', run: () => (el.focus(), rich ? document.execCommand('selectAll') : el.select()) }
     ];
     if (rich) {
       out.push(
         SEP,
-        { label: 'Tebal', hint: 'Ctrl+B', checked: document.queryCommandState('bold'), run: exec('bold') },
-        { label: 'Miring', hint: 'Ctrl+I', checked: document.queryCommandState('italic'), run: exec('italic') },
-        { label: 'Garis bawah', hint: 'Ctrl+U', checked: document.queryCommandState('underline'), run: exec('underline') }
+        { label: 'Tebal', icon: 'bold', hint: 'Ctrl+B', checked: document.queryCommandState('bold'), run: exec('bold') },
+        { label: 'Miring', icon: 'italic', hint: 'Ctrl+I', checked: document.queryCommandState('italic'), run: exec('italic') },
+        { label: 'Garis bawah', icon: 'underline', hint: 'Ctrl+U', checked: document.queryCommandState('underline'), run: exec('underline') }
       );
     }
     return out;
@@ -292,26 +292,26 @@
     if (list === 'pertemuan') {
       out.push(
         { head: `Pekan ${item.pekan} · ${item.jenis}` },
-        { label: item.jenis === 'kuliah' ? 'Jadikan praktikum' : 'Jadikan kuliah', run: () => toggleJenis(item) },
-        { label: 'Pekan, Sub-CPMK, dan pustaka…', run: () => (openPick = `pk:pekan:${item.id}`) },
+        { label: item.jenis === 'kuliah' ? 'Jadikan praktikum' : 'Jadikan kuliah', icon: 'refresh', run: () => toggleJenis(item) },
+        { label: 'Pekan, Sub-CPMK, dan pustaka…', icon: 'pencil', run: () => (openPick = `pk:pekan:${item.id}`) },
         SEP
       );
     } else if (list === 'asesmen') {
-      out.push({ head: item.kode || 'Asesmen' }, { label: 'Buat Lembar Kerja untuk asesmen ini', run: () => lkFor(item) }, SEP);
+      out.push({ head: item.kode || 'Asesmen' }, { label: 'Buat Lembar Kerja untuk asesmen ini', icon: 'filePlus', run: () => lkFor(item) }, SEP);
     } else {
       out.push({ head: item.kode || item.judul || name });
     }
     if (list === 'pustaka') {
-      out.push({ label: item.jenis === 'utama' ? 'Jadikan pustaka pendukung' : 'Jadikan pustaka utama', run: () => asStep(() => (item.jenis = item.jenis === 'utama' ? 'pendukung' : 'utama')) }, SEP);
+      out.push({ label: item.jenis === 'utama' ? 'Jadikan pustaka pendukung' : 'Jadikan pustaka utama', icon: 'refresh', run: () => asStep(() => (item.jenis = item.jenis === 'utama' ? 'pendukung' : 'utama')) }, SEP);
     }
     out.push(
-      { label: `Tambah ${name} di atas`, run: () => addBefore(list, index) },
-      { label: `Tambah ${name} di bawah`, run: () => addAfter(list, index) },
-      { label: 'Duplikat', run: () => duplicate(list, index) },
-      { label: 'Naikkan', disabled: index === 0, run: () => move(list, index, -1) },
-      { label: 'Turunkan', disabled: index === n - 1, run: () => move(list, index, 1) },
+      { label: `Tambah ${name} di atas`, icon: 'addAbove', run: () => addBefore(list, index) },
+      { label: `Tambah ${name} di bawah`, icon: 'addBelow', run: () => addAfter(list, index) },
+      { label: 'Duplikat', icon: 'copy', run: () => duplicate(list, index) },
+      { label: 'Naikkan', icon: 'arrowUp', disabled: index === 0, run: () => move(list, index, -1) },
+      { label: 'Turunkan', icon: 'arrowDown', disabled: index === n - 1, run: () => move(list, index, 1) },
       SEP,
-      { label: `Hapus ${name}`, danger: true, run: () => remove(list, item.id) }
+      { label: `Hapus ${name}`, icon: 'trash', danger: true, run: () => remove(list, item.id) }
     );
     return out;
   }

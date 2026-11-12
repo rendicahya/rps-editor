@@ -16,7 +16,9 @@ Sudah ada:
   beserta total bobot) diturunkan otomatis dari data, tidak diisi manual.
 - Label pekan ("1.a", "b", …), nomor pustaka, dan rujukan [pustaka] di tabel pertemuan dihitung otomatis.
 - Pratinjau = PDF (mesin tata letak yang sama), ekspor PDF dengan data `.rps` tersemat (PDF bisa dibuka lagi).
-- Tab, Undo/Redo, Pustaka Lokal, cari & ganti, tombol **Contoh** (RPS Algoritma dan Struktur Data).
+- Tab (dengan menu klik kanan: simpan, duplikat, tutup tab lain/di kanan/semua), Undo/Redo, Pustaka Lokal,
+  cari & ganti, tombol **Contoh** (RPS Algoritma dan Struktur Data).
+- Dialog tertutup bila diklik di luar kotaknya; panel Periksa juga.
 - **Edit langsung di halaman** (WYSIWYG) di semua halaman:
   - Klik teks untuk mengetik; isian berformat mendukung tebal/miring/garis bawah dan daftar (Ctrl+Shift+7/8).
     Sel yang terbelah antarhalaman bisa diedit di bagian mana pun.
@@ -40,7 +42,11 @@ Sudah ada:
   - waktu pertemuan dibanding SKS (kuliah n×50 menit, praktikum n×170 menit; "2x50 menit" dan "100 menit" terbaca);
   - Lembar Kerja tanpa judul, asesmen, Sub-CPMK, atau deskripsi.
 
-- **Pustaka Daring**: folder, hak akses per anggota/grup, riwayat, recycle bin, dan keterangan "sedang diedit".
+- **Pustaka Daring**: folder, hak akses per anggota/grup (plus pilihan akses umum: Private, semua anggota bisa
+  melihat, atau semua anggota bisa mengedit), riwayat, recycle bin, dan keterangan "sedang diedit".
+  - Pilih banyak item dengan Ctrl/Shift+klik, lalu pindahkan (seret, potong-tempel, atau keyboard) atau hapus
+    sekaligus. Pemindahan dan pemindahan ke Recycle bin bisa diurungkan dari pesan yang muncul (atau Ctrl+Z).
+  - Daftar Lokal dan Daring bisa diurutkan menurut nama atau waktu terakhir diubah.
   - **Unggah banyak sekaligus**: seret berkas `.rps` atau ZIP berisi `.rps` ke daftar atau ke
     folder di pohon (atau tombol unggah berkas / menu klik kanan), maksimal 500 berkas. Subfolder di dalam ZIP dibuat
     ulang; folder bernama sama yang milik Anda dipakai. PDF hasil ekspor RPS Editor juga diterima. Berkas yang tidak

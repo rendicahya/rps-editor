@@ -3,6 +3,7 @@
   import * as ui from './ask.svelte.js';
   import { docTitle } from './model.js';
   import { app } from './store.svelte.js';
+  import { dismiss } from './dismiss.js';
 
   /** onpaste(text, revise) → true bila jawaban berhasil dibuka. */
   let { open = $bindable(false), docKey, onpaste } = $props();
@@ -70,7 +71,7 @@
   }
 </script>
 
-<dialog bind:this={dialog} class="dialog" onclose={() => (open = false)}>
+<dialog bind:this={dialog} class="dialog" use:dismiss onclose={() => (open = false)}>
   <header>
     <h2>RPS dengan bantuan AI</h2>
     <button type="button" class="x" onclick={() => (open = false)} aria-label="Tutup">×</button>
