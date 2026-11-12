@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { layoutDocument, baseline, PT } from './layout.js';
+import { layoutDocument, pagesOf, baseline, PT } from './layout.js';
 import { pdfFont, registerFonts } from './fonts.js';
 import { zlibSync, unzlibSync, strToU8, strFromU8 } from 'fflate';
 import { slug } from './files.js';
@@ -119,9 +119,13 @@ function paintWatermark(canvas, page, text, font) {
   g.restore();
 }
 
-/** opts: { protect: lihat PDF_PROTECT, watermark: teks (kosong = tanpa watermark) }. */
-export async function exportPdf(doc, { protect = 'none', watermark = '' } = {}) {
-  const pages = layoutDocument(doc);
+/**
+ * opts: { protect: lihat PDF_PROTECT, watermark: teks (kosong = tanpa watermark), part: lihat PDF_PARTS }.
+ * Data RPS yang disisipkan selalu utuh, juga saat hanya sebagian halaman yang diekspor.
+ */
+export async function exportPdf(doc, { protect = 'none', watermark = '', part = 'all' } = {}) {
+  const pages = pagesOf(layoutDocument(doc), part);
+  if (!pages.length) throw new Error('RPS ini belum punya Lembar Kerja. Pilih Halaman "Semua halaman" atau "RPS tanpa Lembar Kerja".');
   const pdf = newPdf(docMeta(doc), pages[0], protect);
   const w = await pageWriter(pdf, protect, cleanWatermark(watermark), false);
   for (const page of pages) await w.page(page);
@@ -137,12 +141,17 @@ const TOC = { x: 20, right: 190, top: 20, bottom: 277, cols: [10, 32], size: 10 
  * Menggabungkan `docs` (dokumen RPS, berurutan) menjadi satu PDF dengan halaman daftar isi yang bisa diklik dan
  * bookmark per RPS. `title`: judul kumpulan. opts sama dengan exportPdf; data RPS tidak disisipkan.
  */
-export async function exportPdfBook(docs, title, { protect = 'none', watermark = '' } = {}) {
+export async function exportPdfBook(docs, title, { protect = 'none', watermark = '', part = 'all' } = {}) {
+  // Dengan Halaman "Lembar Kerja saja", RPS tanpa Lembar Kerja tidak ikut (tidak masuk daftar isi).
+  let layouts = docs.map((d) => pagesOf(layoutDocument(d), part));
+  const keep = layouts.map((l, i) => (l.length ? i : -1)).filter((i) => i >= 0);
+  if (!keep.length) throw new Error('Tidak ada Lembar Kerja di RPS yang digabung. Pilih Halaman "Semua halaman" atau "RPS tanpa Lembar Kerja".');
+  docs = keep.map((i) => docs[i]);
+  layouts = keep.map((i) => layouts[i]);
   const first = docs[0] ? docMeta(docs[0]) : {};
   const pdf = newPdf({ title, author: first.author ?? '', subject: `Kumpulan ${docs.length} Rencana Pembelajaran Semester`, keywords: '' }, TOC_PAGE, protect);
   const wm = cleanWatermark(watermark);
   const w = await pageWriter(pdf, protect, wm, true);
-  const layouts = docs.map((d) => layoutDocument(d));
   const font = pdfFont();
   const nameOf = (d) => docTitle(d) || 'RPS tanpa judul';
 

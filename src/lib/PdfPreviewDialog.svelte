@@ -7,7 +7,7 @@
    * pdf: objek jsPDF hasil exportPdf; pages: tata letak (cadangan bila browser tak bisa menampilkan PDF).
    * protect, watermark: pilihan saat ini; onoptions({ protect?, watermark? }) membuat ulang PDF.
    */
-  let { pdf = $bindable(null), pages, filename, fontNote = '', ondownload, protect = 'none', watermark = '', busy = false, onoptions, onmeta, title = 'Pratinjau PDF' } = $props();
+  let { pdf = $bindable(null), pages, filename, fontNote = '', ondownload, protect = 'none', watermark = '', part = 'all', busy = false, onoptions, onmeta, title = 'Pratinjau PDF' } = $props();
 
   // Watermark: '' (tanpa), salah satu WATERMARKS, atau 'custom' dengan teks bebas.
   let wmChoice = $state('');
@@ -94,6 +94,14 @@
     </div>
   </header>
   <div class="opts">
+    <label title="Halaman yang ikut diekspor: RPS (sampul sampai tabel pertemuan), Lembar Kerja, atau keduanya">
+      <span>Halaman</span>
+      <select value={part} disabled={busy} onchange={(e) => onoptions?.({ part: e.currentTarget.value })} aria-label="Halaman yang diekspor">
+        <option value="all">Semua halaman</option>
+        <option value="rps">RPS tanpa Lembar Kerja</option>
+        <option value="lk">Lembar Kerja saja</option>
+      </select>
+    </label>
     <label title={protectInfo[2]}>
       <span>Isi PDF</span>
       <select value={protect} disabled={busy} onchange={(e) => onoptions?.({ protect: e.currentTarget.value })} aria-label="Perlindungan isi PDF">

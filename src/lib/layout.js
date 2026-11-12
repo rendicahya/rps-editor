@@ -334,9 +334,16 @@ export function layoutDocument(doc) {
   layoutCover(doc, pages);
   layoutIdentitas(doc, ctx, pages);
   layoutPertemuan(doc, ctx, pages);
+  const rps = pages.length;
   doc.lembarKerja.forEach((lk, i) => layoutLembarKerja(doc, ctx, lk, i, pages));
+  // part: 'rps' (sampul sampai tabel pertemuan) atau 'lk' (Lembar Kerja), untuk ekspor sebagian.
+  pages.forEach((p, i) => (p.part = i < rps ? 'rps' : 'lk'));
   return pages;
 }
+
+/** Bagian halaman yang bisa diekspor: 'all', 'rps' (tanpa Lembar Kerja), 'lk' (Lembar Kerja saja). */
+export const PDF_PARTS = ['all', 'rps', 'lk'];
+export const pagesOf = (pages, part = 'all') => (part === 'all' ? pages : pages.filter((p) => p.part === part));
 
 /** Peta rujukan dan nilai turunan yang dipakai beberapa halaman. */
 function derive(doc) {

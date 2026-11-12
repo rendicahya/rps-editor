@@ -112,10 +112,13 @@ Sudah ada:
   dibuka lagi di editor.
   Pilihan **Watermark** menambahkan teks miring dan samar di tengah setiap halaman: DRAFT, SALINAN TERKENDALI,
   SALINAN TIDAK TERKENDALI, RAHASIA, CONTOH, atau teks lain (maks. 60 karakter). Watermark hanya ada di PDF.
+  Pilihan **Halaman** menentukan isi PDF: semua halaman (bawaan), **RPS tanpa Lembar Kerja** (sampul sampai tabel
+  pertemuan), atau **Lembar Kerja saja**. Diingat per browser; PDF sebagian tetap membawa data RPS yang utuh sehingga
+  bisa dibuka lagi di editor. Di PDF gabungan dengan "Lembar Kerja saja", RPS yang tidak punya Lembar Kerja dilewati.
 - **PDF gabungan (kumpulan RPS)**: beberapa RPS digabung menjadi satu PDF, diawali halaman daftar isi (kode, mata
   kuliah, prodi, dan halaman tiap RPS; klik untuk melompat) dan bookmark per RPS. Dari Pustaka Daring: pilih RPS atau
   folder lalu **Gabung PDF** (isi folder dan subfoldernya ikut), atau klik kanan folder › **Gabung isinya jadi satu
-  PDF…**. Dari editor: menu Ekspor › **PDF gabungan semua tab…**. Pilihan Isi PDF dan Watermark berlaku juga di sini.
+  PDF…**. Dari editor: menu Ekspor › **PDF gabungan semua tab…**. Pilihan Halaman, Isi PDF, dan Watermark berlaku juga di sini.
 - **Ekspor Word (.docx)** (menu Ekspor): tabel Word biasa yang bisa diedit, dengan bagian dan orientasi sama seperti
   PDF (sampul potret, identitas/matriks/tabel pertemuan lanskap, Lembar Kerja potret). Kepala tabel pertemuan diulang
   di setiap halaman, dan baris panjang dibiarkan terbelah oleh Word, sehingga letak pergantian halaman bisa sedikit
