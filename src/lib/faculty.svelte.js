@@ -7,6 +7,7 @@ const C = {
   sops: 'rps',
   folders: 'rpsFolders',
   editing: 'rpsEditing',
+  locks: 'rpsLocks',
   usage: 'stats/rpsUsage',
   capacity: 'stats/rpsCapacity'
 };
@@ -730,80 +731,121 @@ export async function deleteComment(sopId, id, replies = []) {
   await b.commit().catch(commentFailed);
 }
 
-// ---- "Sedang diedit": hanya pemberitahuan, tidak pernah menghalangi orang lain menyimpan ----
+// ---- Kunci edit: SOP yang dibuka pemegang hak edit tidak bisa dibuka orang lain (lihat locks di aturan) ----
+// Kunci diperbarui tiap EDITING_BEAT selama pemegangnya aktif (ada klik/ketikan dalam IDLE_LIMIT terakhir); tanpa
+// pembaruan selama EDITING_EXPIRY kunci dianggap lepas, mis. browser tertutup atau ditinggal lama.
 
-const marks = new Set();
+const IDLE_LIMIT = 15 * 60 * 1000;
+const held = new Set(); // SOP yang dikunci (atau sedang dikunci) akun ini
 let beat = null;
+let lastActive = Date.now();
+let lostHandler = () => {};
 
-async function sendMark(sopId) {
+/** Ada klik atau ketikan: kunci tetap diperbarui. */
+export const touch = () => (lastActive = Date.now());
+
+/** onLost(sopId, { name, at }) dipanggil bila kunci tidak bisa diambil atau sudah diambil orang lain. */
+export const onLockLost = (fn) => (lostHandler = fn);
+
+const lockRef = (F, db, id) => F.doc(db, C.locks, id);
+const fresh = (l) => !!l && Date.now() - l.at < EDITING_EXPIRY;
+const lockOf = (snap) => {
+  if (!snap.exists()) return null;
+  const l = snap.data({ serverTimestamps: 'estimate' });
+  return { uid: l.uid, name: l.name, at: ms(l.at) };
+};
+
+/** Pemegang kunci SOP `id` bila orang lain dan masih berlaku ({ name, at }), selain itu null. */
+export async function lockedBy(id) {
+  const { F, db } = await load();
+  try {
+    const l = lockOf(await F.getDocFromServer(lockRef(F, db, id)));
+    return fresh(l) && l.uid !== faculty.user.uid ? l : null;
+  } catch {
+    return null; // tidak terbaca (mis. luring): aturan server tetap menolak penyimpanan yang bertabrakan
+  }
+}
+
+/** Mengambil atau memperbarui kunci; melempar FacultyError 'locked' bila dipegang orang lain. */
+async function takeLock(id) {
   const { F, db } = await load();
   const { uid, name } = faculty.user;
-  await F.setDoc(F.doc(db, C.editing, `${sopId}_${uid}`), { sopId, uid, name, at: F.serverTimestamp() });
+  const ref = lockRef(F, db, id);
+  await F.runTransaction(db, async (tx) => {
+    const l = lockOf(await tx.get(ref));
+    if (fresh(l) && l.uid !== uid) throw new FacultyError('locked', `Sedang diedit oleh ${l.name}.`, { holder: l });
+    tx.set(ref, { uid, name, at: F.serverTimestamp() });
+  });
 }
 
-async function clearMark(sopId, uid) {
-  const { F, db } = await load();
-  await F.deleteDoc(F.doc(db, C.editing, `${sopId}_${uid}`));
+function lose(id, e) {
+  held.delete(id);
+  lostHandler(id, e.holder ?? null);
 }
 
-/** Tandai (atau lepaskan tanda) bahwa akun ini sedang mengedit SOP bersama `sopId`. */
+function heartbeat() {
+  if (Date.now() - lastActive > IDLE_LIMIT) return; // ditinggal: kunci dibiarkan kedaluwarsa
+  for (const id of held) takeLock(id).catch((e) => e.code === 'locked' && lose(id, e));
+}
+
+/** Mengunci (on) atau melepas kunci SOP `sopId` milik akun ini. */
 export function setEditing(sopId, on) {
-  if (faculty.status !== 'in' || on === marks.has(sopId)) return;
+  if (faculty.status !== 'in' || on === held.has(sopId)) return;
   if (on) {
-    marks.add(sopId);
-    sendMark(sopId).catch(() => {});
-    beat ??= setInterval(() => marks.forEach((id) => sendMark(id).catch(() => {})), EDITING_BEAT);
+    held.add(sopId);
+    takeLock(sopId).catch((e) => {
+      if (e.code === 'locked') lose(sopId, e);
+      else if (e.code === 'permission-denied') held.delete(sopId); // tidak punya hak edit lagi
+    });
+    beat ??= setInterval(heartbeat, EDITING_BEAT);
   } else {
-    marks.delete(sopId);
-    clearMark(sopId, faculty.user.uid).catch(() => {});
-    if (!marks.size) {
+    held.delete(sopId);
+    load().then(({ F, db }) => F.deleteDoc(lockRef(F, db, sopId))).catch(() => {});
+    if (!held.size) {
       clearInterval(beat);
       beat = null;
     }
   }
 }
 
+/** Kunci yang dipegang akun ini menjadi tepat `ids`. */
+export function syncLocks(ids) {
+  const want = new Set(ids);
+  for (const id of [...held]) if (!want.has(id)) setEditing(id, false);
+  for (const id of want) setEditing(id, true);
+}
+
 export function releaseEditing() {
-  for (const id of [...marks]) setEditing(id, false);
+  for (const id of [...held]) setEditing(id, false);
 }
 
 let watchers = 0;
 let stopWatch = null;
-let lastMarks = [];
+let lastLocks = [];
 let sweep = null;
 
 function publishEditing() {
-  const now = Date.now();
   const next = {};
-  for (const m of lastMarks) {
-    if (now - m.at > EDITING_EXPIRY) {
-      if (now - m.at > EDITING_EXPIRY + 60000) clearMark(m.sopId, m.uid).catch(() => {}); // sisa browser yang tertutup
-      continue;
-    }
-    if (m.uid !== faculty.user?.uid) (next[m.sopId] ??= []).push(m);
-  }
+  for (const l of lastLocks) if (fresh(l) && l.uid !== faculty.user?.uid) next[l.sopId] = [l];
   faculty.editing = next;
 }
 
-/** Mengikuti siapa yang sedang mengedit selama dibutuhkan; panggil fungsi hasilnya untuk berhenti. */
+/** Mengikuti kunci SOP selama dibutuhkan (faculty.editing: sopId → [pemegang]); panggil hasilnya untuk berhenti. */
 export function watchEditing() {
   watchers++;
   if (watchers === 1) {
     load().then(({ F, db }) => {
       if (!watchers) return;
       stopWatch = F.onSnapshot(
-        F.collection(db, C.editing),
+        F.collection(db, C.locks),
         (snap) => {
-          lastMarks = snap.docs.map((d) => {
-            const m = d.data({ serverTimestamps: 'estimate' });
-            return { ...m, at: ms(m.at) };
-          });
+          lastLocks = snap.docs.map((d) => ({ ...lockOf(d), sopId: d.id }));
           publishEditing();
         },
-        () => {} // akses dicabut atau luring: keterangan ini tidak penting untuk diberitahukan
+        () => {} // luring: daftar kunci hanya keterangan; pembukaan SOP tetap diperiksa langsung
       );
     });
-    sweep = setInterval(publishEditing, 60000);
+    sweep = setInterval(publishEditing, 30000);
   }
   return () => {
     if (--watchers) return;

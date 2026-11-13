@@ -780,6 +780,8 @@
   }
 
   function openSop(s) {
+    // Sedang diedit orang lain: dialog tetap terbuka (App juga memeriksa langsung ke server sebelum membuka).
+    if (namesEditing(s) && !isOpen(s)) return ui.alert(`RPS ini sedang diedit oleh ${namesEditing(s)}, jadi belum bisa dibuka. Coba lagi setelah selesai.`, { title: 'RPS terkunci' });
     onclose();
     onopen(s);
   }
@@ -1432,7 +1434,7 @@
                   <small title={s.createdByEmail}>
                     {[searching && folderOf(s) && `di ${pathText(folderOf(s))}`, only === 'due' && `disusun ${formatTanggal(s.since)}`, s.nomor, `dibuat ${s.createdBy === faculty.user.uid ? 'Anda' : s.createdByName}`, `diubah ${s.updatedByName}, ${when(s.updatedAt)}`].filter(Boolean).join(' · ')}
                   </small>
-                  {#if editors}<small class="editing">✎ Sedang diedit oleh {editors}</small>{/if}
+                  {#if editors}<small class="editing">🔒 Terkunci, sedang diedit oleh {editors}</small>{/if}
                 </button>
                 <span class="acts" role="group" aria-label="Tindakan RPS">
                   {@render ib('copy', 'Duplikat sebagai milik Anda', () => duplicate(s))}

@@ -58,7 +58,7 @@ Sudah ada:
   dimasukkan ke grup yang dipilih; alamat yang tidak sah dilewati setelah konfirmasi.
 
 - **Pustaka Daring**: folder, hak akses per anggota/grup (plus pilihan akses umum: Private, semua anggota bisa
-  melihat, atau semua anggota bisa mengedit), riwayat, recycle bin, dan keterangan "sedang diedit".
+  melihat, atau semua anggota bisa mengedit), riwayat, recycle bin, dan kunci edit.
   - Pilih banyak item dengan Ctrl/Shift+klik, lalu pindahkan (seret, potong-tempel, atau keyboard) atau hapus
     sekaligus. Pemindahan dan pemindahan ke Recycle bin bisa diurungkan dari pesan yang muncul (atau Ctrl+Z).
   - Daftar Lokal dan Daring bisa diurutkan menurut nama atau waktu terakhir diubah.
@@ -89,6 +89,12 @@ Sudah ada:
   - **Tautan langsung**: klik kanan RPS (atau tab RPS daring) › **Salin tautan**, atau **Salin tautan** pada komentar.
     Tautan `…/rps-editor/?rps=ID` membuka RPS itu setelah penerimanya masuk (perlu hak lihat), dan tautan komentar
     sekaligus menyorot komentarnya.
+  - **Kunci edit**: RPS yang sedang terbuka di tab pemegang hak edit terkunci. Orang lain, termasuk pemegang hak Lihat,
+    tidak bisa membukanya (dari daftar maupun tautan) sampai tab itu ditutup; di daftar tampil "Terkunci, sedang diedit
+    oleh …". Server juga menolak penyimpanan dari selain pemegang kunci. Kunci lepas sendiri sekitar 5 menit setelah
+    browser pemegangnya tertutup, atau setelah sekitar 15 menit tanpa klik atau ketikan. Tidak ada yang bisa mengambil
+    alih kunci sebelum itu, termasuk admin. Bila kunci ternyata dipegang orang lain, tab yang belum berubah ditutup,
+    sedangkan tab berisi perubahan dilepas dari Pustaka Daring agar isinya tidak hilang.
   - **Rekap CPL** (pilih RPS atau folder › **Rekap CPL**, atau klik kanan folder › **Rekap CPL isinya…**): matriks
     mata kuliah × CPL. Sel berisi persentase nilai akhir mata kuliah yang mengukur CPL itu (seperti tab Rekap nilai di
     Periksa), atau sumbangannya dalam SKS, atau sekadar ✓/○. Baris bawah: jumlah mata kuliah yang menilai tiap CPL dan
@@ -151,7 +157,7 @@ Rancangan koleksi RPS:
 | `rps/{id}` + `versions` | dokumen RPS dan riwayatnya |
 | `rps/{id}/comments/{cid}` | komentar peninjauan dan balasannya (`parent` null = komentar utama) |
 | `rpsFolders/{id}` | folder Pustaka Daring RPS |
-| `rpsEditing/{key}` | keterangan "sedang diedit" |
+| `rpsLocks/{id}` | kunci edit `{ uid, name, at }`: RPS yang sedang dibuka pemegang hak edit |
 | `curricula/{prodiId}` | `{ nama, departemen, managers: [email], cpl, cpmk }`; diedit pengelola prodi dan admin |
 
 Aplikasi ini berbagi origin dengan aplikasi lain di GitHub Pages, jadi semua kunci `localStorage`/IndexedDB berawalan
