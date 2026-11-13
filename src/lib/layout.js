@@ -265,7 +265,7 @@ function drawCell(page, x, y, w, h, c, seg = 0, hot = null) {
     page.fields.push({
       kind: 'text', size: c.size, bold: !!c.bold, align: c.align, hot, ...f,
       id: f.id + (again ? `@${seg}` : ''),
-      x: left, y: fy, w: x + w - c.pad - left, h: fh,
+      x: left, y: fy, w: x + w - c.pad - left, h: fh, indent,
       skip: at >= 0 ? c.lines[at].k : 0,
       lead: it.lead ? textWidth(it.lead, c.size, c.bold) : 0
     });
@@ -529,7 +529,7 @@ function layoutIdentitas(doc, ctx, pages) {
       const list = ctx.pustakaUrut.filter((p) => (p.jenis === 'utama') === (jenis === 'utama'));
       const items = list.map((p) => ({
         prefix: `${ctx.nomorPustaka.get(p.id)}. `, text: p.teks, keep: true,
-        field: R(['pustaka', '#' + p.id, 'teks'], { multiline: false, label: `Pustaka ${ctx.nomorPustaka.get(p.id)}`, placeholder: 'Penulis, “Judul”, Penerbit, Tahun', list: { kind: 'pustaka', id: p.id, jenis } })
+        field: R(['pustaka', '#' + p.id, 'teks'], { multiline: false, label: `Pustaka ${ctx.nomorPustaka.get(p.id)}`, placeholder: 'Penulis, “Judul”, Penerbit, Tahun', list: { kind: 'pustaka', id: p.id, jenis }, hot: `r:pustaka:${p.id}` })
       }));
       const add = { id: `add:pustaka:${jenis}`, kind: 'add', list: 'pustaka', jenis, label: `Tambah pustaka ${jenis}` };
       row(flow, [val(judul, pw, { bold: true, pick: add }), { w: IW - pw, items: items.length ? items : [{ text: '' }] }], { minH: 6 });

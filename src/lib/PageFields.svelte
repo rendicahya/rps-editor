@@ -224,7 +224,8 @@
     document.body.classList.add('row-dragging');
 
     function locate() {
-      const groups = [...document.querySelectorAll(`.f-group[data-hot^="${prefix}"]`)];
+      // Baris tabel memakai kotak alat barisnya; butir pustaka memakai kotak isiannya sendiri.
+      const groups = [...document.querySelectorAll(`.f-group[data-hot^="${prefix}"], .f-wrap.pk[data-hot^="${prefix}"]`)];
       let best = null;
       let dist = Infinity;
       for (const g of groups) {
@@ -295,7 +296,10 @@
     return { destroy: () => node.remove() };
   }
 
-  /** Pindahkan item `id` ke sebelum/sesudah item `targetId` dalam satu langkah Undo. */
+  /**
+   * Pindahkan item `id` ke sebelum/sesudah item `targetId` dalam satu langkah Undo.
+   * Pustaka yang dijatuhkan di kelompok lain ikut berganti jenis (utama ↔ pendukung).
+   */
   function moveTo(list, id, targetId, after) {
     if (id === targetId) return;
     const L = app.doc[list];
@@ -305,12 +309,17 @@
     const t = rest.findIndex((x) => x.id === targetId);
     if (t < 0) return;
     const to = after ? t + 1 : t;
-    if (to === from) return;
+    const jenis = list === 'pustaka' && rest[t].jenis !== L[from].jenis ? rest[t].jenis : null;
+    if (to === from && !jenis) return;
     asStep(() => {
       const [item] = L.splice(from, 1);
+      if (jenis) item.jenis = jenis;
       L.splice(to, 0, item);
     });
   }
+
+  /** Data seret untuk butir pustaka (sama bentuknya dengan rowOf). */
+  const pustakaRow = (f) => (app.doc.pustaka.length > 1 ? { list: 'pustaka', id: f.list.id } : null);
 
   // Kelompok isian yang sedang disorot/difokus (satu baris daftar): alatnya ditampilkan.
   let hover = $state(null);
@@ -542,9 +551,16 @@
         {/if}
       </div>
     {:else if f.kind === 'text'}
-      <div class="f-wrap" class:bold={f.bold} class:center={f.align === 'center'} class:upper={f.upper} style={box(f)} data-hot={f.hot} data-fid={f.id}>
+      {@const pk = f.list?.kind === 'pustaka'}
+      <div class="f-wrap" class:pk class:dragged={pk && isDragged(f)} class:bold={f.bold} class:center={f.align === 'center'} class:upper={f.upper} style={box(f)} data-hot={f.hot} data-fid={f.id}>
         {@render editor(f)}
       </div>
+      {#if pk && !f.id.includes('@') && pustakaRow(f)}
+        <!-- Pegangan seret butir pustaka, di kiri nomornya. -->
+        <span class="g-tools g-pk" class:hot={dragRow ? isDragged(f) : isHot(f)} style="left:calc({f.x} * var(--mm));top:calc({f.y} * var(--mm));padding-right:calc({f.indent ?? 0} * var(--mm) + 2px)" data-hot={f.hot}>
+          <button tabindex="-1" class="grip" title="Seret untuk memindahkan; jatuhkan di kelompok lain untuk mengganti jenis (Esc membatalkan)" aria-label="Seret untuk memindahkan" onpointerdown={(e) => startDrag(e, pustakaRow(f))}>⠿</button>
+        </span>
+      {/if}
     {:else if f.kind === 'add'}
       <button class="f-hint" style={box(f)} data-fid={f.id} onclick={() => (f.list === 'pustaka' ? insertAt('pustaka', app.doc.pustaka.length, newItem('pustaka', { jenis: f.jenis })) : lkFor(null))}>
         {f.label.startsWith('+') ? f.label : '+ ' + f.label}
@@ -854,7 +870,16 @@
     touch-action: none;
     font-size: 12px;
   }
-  .f-group.dragged {
+  .g-pk {
+    /* Kotaknya menutupi nomor butir agar penunjuk bisa berpindah dari teks ke pegangan tanpa kehilangan sorotan. */
+    transform: translateX(-100%);
+  }
+  .g-pk.hot {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .f-group.dragged,
+  .f-wrap.dragged {
     background: rgb(var(--edit) / 0.1);
     outline: 1.5px dashed rgb(var(--edit) / 0.6);
     outline-offset: -1px;

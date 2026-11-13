@@ -822,6 +822,34 @@
   }
   const isOpen = (s) => openIds.includes(s.id);
 
+  // Awalan nama seperti "B.2" atau "B.2.1." dipindah menjadi kode pustaka; sisanya menjadi nama RPS.
+  const PREFIX = /^([A-Za-z](?:\.\d+)+)\.?\s+(\S.*)$/;
+  const prefixOf = (s) => (canEdit(s) && !s.deletedAt ? (s.title ?? '').trim().match(PREFIX) : null);
+  const withPrefix = (list) => list.filter((d) => !d.isFolder && prefixOf(d.item)).map((d) => d.item);
+
+  async function prefixToCode(sops) {
+    sops = sops.filter((s) => prefixOf(s));
+    if (!sops.length) return;
+    const sample = sops.slice(0, 3).map((s) => `"${s.title}"`).join(', ') + (sops.length > 3 ? `, dan ${sops.length - 3} lainnya` : '');
+    const ok = await ui.confirm(`Awalan nama ${sops.length} RPS (${sample}) akan dipindah ke kode pustaka. Nama RPS di dokumennya ikut berubah dan tercatat sebagai versi baru.`, { title: 'Pindahkan awalan ke kode', ok: 'Pindahkan' });
+    if (!ok) return;
+    const failed = [];
+    for (const s of sops) {
+      const [, code, title] = prefixOf(s);
+      try {
+        onrenamed(s.id, await F.renameSop(s.id, title));
+        await F.setSopCode(s.id, code);
+      } catch (e) {
+        failed.push(`${s.title}: ${e.message}`);
+      }
+    }
+    selected.clear();
+    await refresh();
+    const done = sops.length - failed.length;
+    if (done) onnotify(`Awalan ${done} RPS dipindah ke kode pustaka`);
+    if (failed.length) ui.alert(`${failed.length} RPS tidak bisa diubah:\n${failed.join('\n')}`, { title: 'Sebagian gagal' });
+  }
+
   /** RPS kosong dibuat di `folder` lalu langsung dibuka di tab baru. */
   async function newSop(folder = here) {
     const name = (await ui.prompt('Nama RPS', '', { title: 'RPS baru', ok: 'Buat', maxlength: 300 }))?.trim();
@@ -1108,6 +1136,7 @@
       { label: 'Gabung jadi satu PDF…', icon: 'book', run: () => makeBook(list) },
       { label: 'Rekap CPL…', icon: 'grid', run: () => makeRekap(list) },
       { label: 'Kelengkapan RPS…', icon: 'check', run: () => makeLengkap(list) },
+      ...(withPrefix(list).length ? [{ label: `Pindahkan awalan nama ke kode (${withPrefix(list).length} RPS)…`, icon: 'pencil', run: () => prefixToCode(withPrefix(list)) }] : []),
       { sep: true },
       { label: `Pindahkan ${n} item…`, icon: 'move', run: () => startMove(own), disabled: !n },
       { label: 'Potong', icon: 'cut', hint: 'Ctrl+X', run: () => cut(own), disabled: !n },
@@ -1170,6 +1199,7 @@
       ...(manage ? [{ label: 'Hapus riwayat lama…', icon: 'trash', run: () => pruneOld(s) }] : []),
       { label: accessTip(s), icon: 'users', run: () => openAccess('sops', s) },
       ...(canEdit(s) ? [{ label: 'Ubah nama', icon: 'pencil', hint: 'F2', run: () => rename(s) }, { label: 'Ubah kode pustaka…', icon: 'pencil', run: () => changeCode(s) }] : []),
+      ...(prefixOf(s) ? [{ label: `Pindahkan awalan "${prefixOf(s)[1]}" ke kode`, icon: 'pencil', run: () => prefixToCode([s]) }] : []),
       ...(manage
         ? [
             { label: 'Pindahkan', icon: 'move', run: () => moveSop(s) },
@@ -1332,6 +1362,7 @@
 {#snippet selBar()}
   {#if selRows.length}
     {@const own = selRows.filter((d) => canManage(d.item))}
+    {@const pre = withPrefix(selRows)}
     <div class="selbar" role="toolbar" aria-label="Tindakan untuk yang dipilih">
       <strong>{selRows.length} dipilih</strong>
       {#if view === 'bin'}
@@ -1341,6 +1372,7 @@
         <button type="button" class="btn" onclick={() => makeBook(selRows)} title="Gabungkan RPS yang dipilih (termasuk isi folder) menjadi satu PDF berdaftar isi"><Icon name="book" size={14} /> Gabung PDF</button>
         <button type="button" class="btn" onclick={() => makeRekap(selRows)} title="Matriks mata kuliah × CPL dari RPS yang dipilih (termasuk isi folder)"><Icon name="grid" size={14} /> Rekap CPL</button>
         <button type="button" class="btn" onclick={() => makeLengkap(selRows)} title="Laporan kelengkapan RPS yang dipilih (termasuk isi folder): hasil Periksa, komentar, dan mata kuliah katalog yang belum punya RPS"><Icon name="check" size={14} /> Kelengkapan</button>
+        {#if pre.length}<button type="button" class="btn" onclick={() => prefixToCode(pre)} title="Awalan nama seperti B.2 dipindah ke kode pustaka"><Icon name="pencil" size={14} /> Awalan ke kode ({pre.length})</button>{/if}
         <button type="button" class="btn" disabled={!own.length} onclick={() => startMove(own)}><Icon name="move" size={14} /> Pindahkan</button>
         <button type="button" class="btn danger" disabled={!own.length} onclick={() => deleteMany(own)}><Icon name="trash" size={14} /> Hapus</button>
       {/if}
@@ -1539,7 +1571,7 @@
                 {@render pick(row)}
                 <button class="main" onclick={(e) => rowClick(e, row, () => enterFolder(f.id))} onfocus={() => (cursor = row.key)}>
                   <strong><Icon name="folder" size={18} /> {f.name} {#each accessTags(f) as t}<em class:shared={F.isShared(f)}>{t}</em>{/each}</strong>
-                  <small>{[searching && parent && `di ${pathText(parent)}`, folderInfo(f), `dibuat ${f.createdBy === faculty.user.uid ? 'Anda' : f.createdByName}`].filter(Boolean).join(' · ')}</small>
+                  <small>{#if searching && parent}<span>di {pathText(parent)}</span>{/if}<span class="hov">{folderInfo(f)}</span></small>
                 </button>
                 <span class="acts" role="group" aria-label="Tindakan folder">
                   {@render ib('users', accessTip(f), () => openAccess('folders', f))}
@@ -1564,7 +1596,7 @@
                     {#if openCount(s)}<em class="notes" title="Komentar yang belum ditandai selesai">{openCount(s)} komentar</em>{/if}
                   </strong>
                   <small title={`Terakhir diubah ${when(s.updatedAt)} oleh ${s.updatedByName}`}>
-                    {[searching && folderOf(s) && `di ${pathText(folderOf(s))}`, only === 'due' && `disusun ${formatTanggal(s.since)}`, `diubah ${ago(s.updatedAt)}`].filter(Boolean).join(' · ')}
+                    {#if searching && folderOf(s)}<span>di {pathText(folderOf(s))}</span>{/if}{#if only === 'due'}<span>disusun {formatTanggal(s.since)}</span>{/if}<span class="hov">Diubah {ago(s.updatedAt)}</span>
                   </small>
                   {#if editors}<small class="editing">🔒 Terkunci, sedang diedit oleh {editors}</small>{/if}
                 </button>
@@ -2112,6 +2144,16 @@
   .main small {
     color: var(--muted);
     font-size: 0.78rem;
+  }
+  .main small > span + span::before {
+    content: ' · ';
+  }
+  /* Keterangan tambahan hanya muncul saat baris disorot (perangkat sentuh tetap menampilkannya).
+     Tempatnya tetap disediakan agar tinggi baris tidak berubah. */
+  @media (hover: hover) {
+    .list > li:not(:hover):not(:focus-within) .main small .hov {
+      visibility: hidden;
+    }
   }
   .main small.editing {
     color: var(--danger);
