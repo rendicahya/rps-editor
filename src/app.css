@@ -570,7 +570,7 @@ textarea:focus {
 .export-menu button:focus-visible {
   background: var(--surface-2);
 }
-.export-menu button.sep {
+.export-menu button.divided {
   border-top: 1px solid var(--line);
   margin-top: 0.2rem;
   padding-top: 0.55rem;

@@ -5,6 +5,8 @@
   import { tips } from './tips.js';
   import { dismiss } from './dismiss.js';
   import Icon from './Icon.svelte';
+  import TourButton from './TourButton.svelte';
+  import { LOCAL_TOUR, FACULTY_TOUR } from './tourSteps.js';
 
   /**
    * Dialog Pustaka: tab Lokal (browser ini) dan Daring (RPS bersama). Kedua panel tetap terpasang, jadi folder dan
@@ -73,6 +75,7 @@
       >
     {/each}
   </div>
+  <TourButton steps={tab === 'local' ? LOCAL_TOUR : FACULTY_TOUR} label={tab === 'local' ? 'Tur singkat Pustaka Lokal' : 'Tur singkat Pustaka Daring'} />
 {/snippet}
 
 <!-- Berkas yang dilepas di dialog ini tidak sampai ke editor di belakangnya (yang membukanya di tab).

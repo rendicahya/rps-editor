@@ -19,6 +19,8 @@ Sudah ada:
 - Tab (dengan menu klik kanan: simpan, duplikat, tutup tab lain/di kanan/semua), Undo/Redo, Pustaka Lokal,
   cari & ganti, tombol **Contoh** (RPS Algoritma dan Struktur Data).
 - Dialog tertutup bila diklik di luar kotaknya; panel Periksa juga.
+- **Tur pengenalan**: saat pertama kali masuk di sebuah browser, tur singkat menyorot bagian-bagian utama aplikasi (bisa dilewati, juga dengan Esc; panah kiri/kanan untuk berpindah). Tur bisa dibuka lagi lewat menu **?** (Bantuan) di toolbar. Dialog Pustaka, Asisten AI, dan Admin punya tombol **?** sendiri.
+- **Pintasan keyboard**: daftar semua pintasan dibuka dengan **Ctrl+/** atau dari menu Bantuan.
 - **Edit langsung di halaman** (WYSIWYG) di semua halaman:
   - Klik teks untuk mengetik; isian berformat mendukung tebal/miring/garis bawah dan daftar (Ctrl+Shift+7/8).
     Sel yang terbelah antarhalaman bisa diedit di bagian mana pun.

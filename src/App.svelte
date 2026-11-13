@@ -30,6 +30,9 @@
   import * as Faculty from './lib/faculty.svelte.js';
   import { faculty } from './lib/faculty.svelte.js';
   import DocMetaDialog from './lib/DocMetaDialog.svelte';
+  import Tour from './lib/Tour.svelte';
+  import { TOUR_STEPS } from './lib/tourSteps.js';
+  import ShortcutsDialog from './lib/ShortcutsDialog.svelte';
 
   let toast = $state(null); // { msg, action, n }
   let toastTimer;
@@ -1237,6 +1240,11 @@
     }
     if (!(e.ctrlKey || e.metaKey)) return;
     const k = e.key.toLowerCase();
+    if ((k === '/' || e.code === 'Slash') && !e.altKey) {
+      e.preventDefault();
+      if (!document.querySelector('dialog[open]')) showShortcuts();
+      return;
+    }
     if (empty && (k === 's' || k === 'p' || k === 'f' || k === 'h')) return e.preventDefault();
     if (k === 's') {
       e.preventDefault();
@@ -1284,6 +1292,32 @@
   $effect(() => {
     if (!signedIn) untrack(() => (libraryOpen = false));
   });
+
+  // Tur pengenalan: muncul sekali untuk pengguna baru di browser ini, bisa dibuka lagi dari tombol "?".
+  let tourOpen = $state(false);
+  $effect(() => {
+    if (!signedIn || getPref('tourDone')) return;
+    let timer;
+    const tryStart = () => {
+      // Tunggu sampai tidak ada dialog lain yang terbuka (mis. pemulihan sesi).
+      if (document.querySelector('dialog[open]')) timer = setTimeout(tryStart, 1000);
+      else tourOpen = true;
+    };
+    timer = setTimeout(tryStart, 700);
+    return () => clearTimeout(timer);
+  });
+  function startTour() {
+    exportOpen = saveOpen = helpOpen = false;
+    tourOpen = true;
+  }
+
+  // Menu Bantuan (tombol ?): tur pengenalan dan daftar pintasan keyboard (juga Ctrl+/).
+  let helpOpen = $state(false);
+  let shortcutsOpen = $state(false);
+  function showShortcuts() {
+    exportOpen = saveOpen = helpOpen = false;
+    shortcutsOpen = true;
+  }
 
   onMount(() => {
     Faculty.start();
@@ -1335,7 +1369,7 @@
   onkeydown={(e) => {
     if (!signedIn) return;
     if (e.key === 'Escape') {
-      exportOpen = saveOpen = false;
+      exportOpen = saveOpen = helpOpen = false;
     }
     onKey(e);
   }}
@@ -1343,6 +1377,7 @@
     if (e.target.closest?.('.export')) return;
     exportOpen = false;
     saveOpen = false;
+    helpOpen = false;
   }}
 />
 
@@ -1386,14 +1421,14 @@
       </div>
     </div>
     <nav class="toolbar">
-      <button class="btn ghost" onclick={newDoc} title="Dokumen baru"><Icon name="filePlus" size={15} />Baru</button>
+      <button class="btn ghost" data-tour="new" onclick={newDoc} title="Dokumen baru"><Icon name="filePlus" size={15} />Baru</button>
       <button class="btn ghost" onclick={open} title="Buka berkas .rps (Ctrl+O)"><Icon name="folder" size={15} />Buka</button>
       <button class="btn ghost" onclick={openSample} title="Buka contoh RPS (Algoritma dan Struktur Data)"><Icon name="file" size={15} />Contoh</button>
-      <button class="btn ghost" onclick={() => (curriculumOpen = true)} aria-haspopup="dialog" title="Katalog CPL/CPMK per prodi: pakai di RPS ini, atau kelola bila Anda pengelola prodi"><Icon name="book" size={15} />Kurikulum</button>
-      <button class="btn ghost" onclick={() => (aiOpen = true)} aria-haspopup="dialog" title="Susun RPS baru, impor RPS lama (PDF/Word), atau revisi RPS ini dengan bantuan asisten AI"><Icon name="sparkle" size={15} />Asisten AI</button>
+      <button class="btn ghost" data-tour="curriculum" onclick={() => (curriculumOpen = true)} aria-haspopup="dialog" title="Katalog CPL/CPMK per prodi: pakai di RPS ini, atau kelola bila Anda pengelola prodi"><Icon name="book" size={15} />Kurikulum</button>
+      <button class="btn ghost" data-tour="ai" onclick={() => (aiOpen = true)} aria-haspopup="dialog" title="Susun RPS baru, impor RPS lama (PDF/Word), atau revisi RPS ini dengan bantuan asisten AI"><Icon name="sparkle" size={15} />Asisten AI</button>
       {@render libraryButton('btn ghost')}
       <div class="export">
-        <button class="btn ghost" onclick={toggleSaveMenu} disabled={empty} aria-haspopup="menu" aria-expanded={saveOpen} title="Simpan ke Pustaka Lokal, Pustaka Daring, atau sebagai berkas .rps">
+        <button class="btn ghost" data-tour="save" onclick={toggleSaveMenu} disabled={empty} aria-haspopup="menu" aria-expanded={saveOpen} title="Simpan ke Pustaka Lokal, Pustaka Daring, atau sebagai berkas .rps">
           <Icon name="save" size={15} />
           Simpan
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
@@ -1438,10 +1473,33 @@
           {#if theme === 'dark'}<circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" />{:else}<path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z" />{/if}
         </svg>
       </button>
+      <div class="export">
+        <button
+          class="icon"
+          class:on={helpOpen}
+          data-tour="tour"
+          onclick={() => ((exportOpen = saveOpen = false), (helpOpen = !helpOpen))}
+          aria-haspopup="menu"
+          aria-expanded={helpOpen}
+          title="Bantuan: tur pengenalan dan pintasan keyboard"
+          aria-label="Bantuan"><Icon name="help" /></button
+        >
+        {#if helpOpen}
+          <div class="export-menu" role="menu">
+            <button role="menuitem" onclick={startTour}>
+              <Icon name="help" />
+              <strong>Tur pengenalan</strong><small>Kenali bagian-bagian aplikasi langkah demi langkah</small>
+            </button>
+            <button role="menuitem" onclick={showShortcuts}>
+              <Icon name="keyboard" />
+              <strong>Pintasan keyboard</strong><small>Daftar semua pintasan · Ctrl+/</small>
+            </button>
+          </div>
+        {/if}
+      </div>
       <span class="sep"></span>
       <button
-        class="btn ghost check-btn"
-        class:on={checkOpen}
+        class="btn ghost check-btn"        class:on={checkOpen}
         disabled={empty}
         onclick={() => (checkOpen = !checkOpen)}
         title={issueErrors + issueWarns ? `${issueErrors} salah, ${issueWarns} peringatan` : 'Tidak ada temuan'}
@@ -1466,7 +1524,7 @@
         {#if openNotes}<span class="badge">{openNotes}</span>{/if}
       </button>
       <div class="export">
-        <button class="btn primary" onclick={() => ((saveOpen = false), (exportOpen = !exportOpen))} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy || empty}>
+        <button class="btn primary" data-tour="export" onclick={() => ((saveOpen = helpOpen = false), (exportOpen = !exportOpen))} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy || empty}>
           <Icon name="export" size={15} />
           {exportBusy ? `Membuat ${exportBusy}…` : 'Ekspor'}
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
@@ -1491,7 +1549,7 @@
                 <strong>PDF gabungan semua tab…</strong><small>{tabs.list.length} RPS dalam satu PDF berdaftar isi</small>
               </button>
             {/if}
-            <button role="menuitem" class="sep" onclick={() => ((exportOpen = false), (metaOpen = true))}>
+            <button role="menuitem" class="divided" onclick={() => ((exportOpen = false), (metaOpen = true))}>
               <Icon name="info" />
               <strong>Properti dokumen…</strong><small>Judul, penulis, subjek, dan kata kunci berkas</small>
             </button>
@@ -1615,7 +1673,7 @@
           </span>
         </div>
       {:else}
-        <div class="preview-scroll" bind:this={previewScroll}>
+        <div class="preview-scroll" data-tour="page" bind:this={previewScroll}>
           <Preview {pages} {zoom} />
         </div>
       {/if}
@@ -1716,6 +1774,8 @@
   <FacultyConflict info={conflict} onchoice={chooseConflict} />
   <CloseConfirm info={closeAsk} onchoice={chooseClose} />
   <DocMetaDialog doc={app.doc} bind:open={metaOpen} onsave={saveMeta} />
+  <Tour bind:open={tourOpen} steps={TOUR_STEPS} ondone={() => setPref('tourDone', '1')} />
+  <ShortcutsDialog bind:open={shortcutsOpen} />
 
   {#if toast}
     {#key toast.n}
