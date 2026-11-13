@@ -2,7 +2,8 @@
   import PageSvg from './PageSvg.svelte';
   import PageFields from './PageFields.svelte';
 
-  let { pages, zoom = 100, editable = true } = $props();
+  // fields = false: hanya gambar halaman, tanpa lapisan isian editor (untuk pratinjau baca saja).
+  let { pages, zoom = 100, editable = true, fields = true } = $props();
   // Lebar tampilan sebanding ukuran kertas: halaman lanskap (297 mm) memenuhi lebar area, halaman potret lebih sempit.
   const WIDEST = 297;
 </script>
@@ -12,7 +13,7 @@
     <figure class="sheet" style:--frac={page.w / WIDEST}>
       <div class="page">
         <PageSvg {page} />
-        {#if page.fields.length}<PageFields fields={page.fields} pageW={page.w} pageH={page.h} {editable} />{/if}
+        {#if fields && page.fields.length}<PageFields fields={page.fields} pageW={page.w} pageH={page.h} {editable} />{/if}
       </div>
       <figcaption>Halaman {i + 1} / {pages.length}</figcaption>
     </figure>

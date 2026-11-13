@@ -33,7 +33,8 @@ const EDITING_EXPIRY = 5 * 60 * 1000;
  * status: idle | loading | out | domain (bukan akun @ub.ac.id atau @gmail.com) | notMember | in | error.
  * editing: sopId → daftar orang lain yang sedang mengedit.
  */
-export const faculty = $state({ status: 'idle', user: null, role: null, groups: [], error: '', editing: {} });
+// stale: isi Pustaka Daring diubah dari luar panelnya (mis. disalin dari Pustaka Lokal); panel memuat ulang saat tampil.
+export const faculty = $state({ status: 'idle', user: null, role: null, groups: [], error: '', editing: {}, stale: false });
 
 // Email anggota yang terakhir lolos pemeriksaan di server, agar aplikasi tetap bisa dipakai saat luring.
 const MEMBER_KEY = 'sop-member';

@@ -986,9 +986,10 @@
   /**
    * Versi lama dari Riwayat dimuat ke tab yang membuka RPS `id` sebagai satu langkah suntingan: bisa di-Undo, dan baru
    * menjadi isi terkini di Pustaka Daring setelah disimpan. Nama mata kuliah tidak ikut mundur, sama seperti Kembalikan biasa.
+   * `local`: `id` adalah id tab (= id entri Pustaka Lokal).
    */
-  function restoreIntoTab(id, json) {
-    const t = tabs.list.find((x) => x.remote?.id === id);
+  function restoreIntoTab(id, json, local = false) {
+    const t = tabs.list.find((x) => (local ? x.id === id : x.remote?.id === id));
     if (!t) return;
     let doc;
     try {
@@ -1001,7 +1002,7 @@
     doc.identitas.mataKuliah = app.doc.identitas.mataKuliah;
     app.doc = doc;
     checkpoint();
-    notify('Versi lama dimuat. Simpan ke Pustaka Daring untuk menerapkannya, atau Urungkan (Ctrl+Z).');
+    notify(`Versi lama dimuat. Simpan ke ${local ? 'Pustaka Lokal' : 'Pustaka Daring'} untuk menerapkannya, atau Urungkan (Ctrl+Z).`);
   }
 
   /** Tab tertaut ke `remote`, dan isi yang baru tersimpan tidak lagi dianggap perubahan. */
@@ -1034,6 +1035,7 @@
     try {
       if (!tab.remote) {
         if (isBlank(doc)) return notify('Dokumen masih kosong, belum ada yang diunggah'), false;
+        if (!(await checkDone('unggah'))) return false;
         linkTab(tab, doc, await Faculty.uploadSop(doc, undefined, folder));
         notify('Diunggah ke Pustaka Daring.');
         return true;
@@ -1119,8 +1121,31 @@
     return go;
   }
 
+  /**
+   * Sebelum ekspor, cetak, atau unggah pertama: ingatkan bila Periksa masih menemukan kesalahan atau peringatan.
+   * false = batal, panel Periksa dibuka. Temuan yang sama tidak ditanyakan lagi setelah dijawab "Tetap …".
+   */
+  let checkAllowed = '';
+  async function checkDone(verb) {
+    const list = issues.filter((i) => i.level !== 'info');
+    if (!list.length) return true;
+    const sig = tabs.active + '\n' + list.map((i) => i.msg).join('\n');
+    if (sig === checkAllowed) return true;
+    const counts = [issueErrors && `${issueErrors} kesalahan`, issueWarns && `${issueWarns} peringatan`].filter(Boolean).join(' dan ');
+    const top = list.slice(0, 6).map((i) => `• ${i.msg}`).join('\n');
+    const more = list.length > 6 ? `\n…dan ${list.length - 6} lainnya.` : '';
+    const go = await ui.confirm(`Pemeriksaan menemukan ${counts} pada RPS ini:\n\n${top}${more}`, {
+      title: 'RPS belum lengkap',
+      ok: `Tetap ${verb}`,
+      cancel: 'Perbaiki dulu'
+    });
+    if (go) checkAllowed = sig;
+    else checkOpen = true;
+    return go;
+  }
+
   async function pdf() {
-    if (pdfBusy || !(await reviewDone())) return;
+    if (pdfBusy || !(await checkDone('ekspor')) || !(await reviewDone())) return;
     pdfBook = null;
     pdfSaved = fileMark();
     buildPdf();
@@ -1129,7 +1154,7 @@
   /** Cetak: pratinjau PDF dibuka, lalu dialog cetak browser langsung muncul. */
   let pdfPrint = $state(false);
   async function printPdf() {
-    if (pdfBusy || !(await reviewDone())) return;
+    if (pdfBusy || !(await checkDone('cetak')) || !(await reviewDone())) return;
     pdfPrint = true;
     pdfBook = null;
     pdfSaved = null;
@@ -1179,7 +1204,7 @@
   // Ekspor Word dimuat terpisah agar tidak memperbesar muatan awal.
   let exportBusy = $state('');
   async function exportDocxFile() {
-    if (!(await reviewDone())) return;
+    if (!(await checkDone('ekspor')) || !(await reviewDone())) return;
     exportBusy = 'DOCX';
     const saved = fileMark();
     try {
@@ -1653,7 +1678,10 @@
       onopen: openEntry,
       onsave: saveToLibrary,
       cansave: !empty,
-      onnotify: notify
+      onnotify: notify,
+      onbook: makeBook,
+      tabjson: (id) => (tabs.list.some((t) => t.id === id) ? tabJson(id) : null),
+      onrestoretab: (id, json) => restoreIntoTab(id, json, true)
     }}
     faculty={{
       openIds: openRemoteIds,

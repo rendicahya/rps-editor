@@ -55,11 +55,40 @@ Sudah ada:
   berlencana **Perlu ditinjau** dan bisa didaftar sekaligus lewat **Perlu ditinjau** di bawah pohon folder.
 - **Admin** (tombol di toolbar, hanya tampil untuk admin): dialog dengan halaman **Anggota**, **Grup**, dan
   **Penyimpanan**.
+  - **Bawaan RPS baru**: nama universitas dan fakultas untuk RPS baru. Sebelum admin mengaturnya, keduanya kosong.
   - Tambah anggota sekaligus: tempel banyak email, dipisah koma, spasi, titik koma, atau baris baru (format
     "Nama &lt;email&gt;" juga diterima). Email yang sudah terdaftar tidak diubah perannya, hanya dimasukkan ke grup yang
     dipilih; alamat yang tidak sah dilewati setelah konfirmasi.
   - Grup bisa dibuat, diganti nama, diisi anggotanya, dan **diduplikat** (grup baru dengan anggota yang sama; hak akses
     RPS grup asal tidak ikut disalin).
+
+- **Pustaka Lokal**: RPS yang disimpan ke Pustaka Lokal berada di browser (IndexedDB) dan isinya hanya berubah saat
+  disimpan. Tampilannya sama dengan Pustaka Daring: pohon folder di kiri (lebarnya bisa digeser), daftar khusus (Perlu
+  ditinjau, Baru dihapus), Filter (label, waktu diubah), tombol tindakan yang muncul saat baris disorot, pilihan dengan
+  Ctrl/Shift+klik, menu klik kanan, potong-tempel (Ctrl+X/Ctrl+V), ubah nama (F2), dan Urungkan (tombol di pesan atau
+  Ctrl+Z, beberapa detik setelah memindah, menghapus, atau mengubah nama). Hak akses, komentar, dan kunci edit hanya
+  ada di Daring.
+  - **Folder** (bisa bersarang): buat, ubah nama, pindahkan (tombol, seret, atau potong-tempel), unduh isinya sebagai
+    ZIP, atau hapus. RPS baru yang disimpan dari dialog Pustaka masuk ke folder yang sedang dibuka.
+  - **Label** mengelompokkan RPS (satu RPS boleh berlabel lebih dari satu), bisa disaring di Filter, dan bisa diganti
+    nama atau dihapus sekaligus di semua RPS. Label dan folder tidak masuk ke berkas `.rps`.
+  - **Riwayat versi**: setiap kali RPS disimpan, isi sebelumnya dicatat (20 versi terakhir). Versi lama bisa
+    dipratinjau, dibandingkan, dikembalikan (bila RPS terbuka di tab, versinya dimuat ke tab dan bisa di-Urungkan),
+    atau dihapus.
+  - **Baru dihapus**: RPS yang dihapus (termasuk isi folder yang dihapus) disimpan 30 hari dan bisa dipulihkan ke
+    folder asalnya, atau dihapus permanen.
+  - **Salin ke Pustaka Daring**: RPS terpilih, atau folder beserta subfoldernya, diunggah ke folder Daring pilihan
+    dengan susunan folder yang sama; folder Daring bernama sama di tujuan dipakai lagi.
+  - Seperti di Daring: **daftar induk RPS (XLSX)**, **cadangan ZIP**, **Gabung PDF** dari pilihan, dan **impor**
+    berkas `.rps`, PDF/Word hasil ekspor, atau `.zip` (tombol unggah atau lepas berkas di daftar/folder; folder di
+    dalam ZIP ikut dibuat).
+- **Pratinjau RPS di pustaka**: tombol mata di baris RPS (Pustaka Lokal dan Daring) menampilkan halamannya persis seperti
+  cetakan tanpa membukanya di tab; **Buka di tab** membukanya.
+- **Cuplikan hasil pencarian**: di kedua pustaka, kata yang ditemukan di isi RPS (CPL/CPMK/Sub-CPMK, materi dan
+  indikator pertemuan, deskripsi, pustaka, dosen) ditampilkan di bawah hasilnya beserta tempatnya, mis. "Pekan 3 · materi".
+- **Pemeriksaan sebelum ekspor, cetak, dan unggah pertama ke Pustaka Daring**: bila Periksa masih menemukan kesalahan
+  atau peringatan, daftar singkatnya ditampilkan dengan pilihan **Perbaiki dulu** (membuka panel Periksa) atau **Tetap
+  ekspor/cetak/unggah**. Temuan yang sama tidak ditanyakan lagi setelah dijawab "Tetap".
 
 - **Pustaka Daring**: folder, hak akses per anggota/grup (plus pilihan akses umum: Private, semua anggota bisa
   melihat, atau semua anggota bisa mengedit), riwayat, recycle bin, dan kunci edit.

@@ -1,7 +1,8 @@
 <script>
   import { tick, untrack } from 'svelte';
   import { SvelteSet } from 'svelte/reactivity';
-  import { haystack } from './library.js';
+  import { searchParts } from './library.js';
+  import MatchSnippet from './MatchSnippet.svelte';
   import { readRpsFiles } from './bulkImport.js';
   import * as F from './faculty.svelte.js';
   import { faculty, canManage, canEdit } from './faculty.svelte.js';
@@ -16,6 +17,7 @@
   import ProdiRekapDialog from './ProdiRekapDialog.svelte';
   import KelengkapanDialog from './KelengkapanDialog.svelte';
   import SopInfoDialog from './SopInfoDialog.svelte';
+  import RpsPreviewDialog from './RpsPreviewDialog.svelte';
   import { review, setReviewYears, REVIEW_CHOICES, reviewSince, reviewDue, isReviewDue } from './review.svelte.js';
   import { formatTanggal, todayIso } from './model.js';
   import { registerXlsx } from './register.js';
@@ -46,6 +48,7 @@
   let moving = $state(null); // { item, isFolder, target }
   let accessTarget = $state(null);
   let infoOf = $state(null); // RPS yang detailnya sedang ditampilkan
+  let previewOf = $state(null); // RPS yang sedang dipratinjau
   let menu = $state(null); // { x, y, items }
   let query = $state('');
   let busy = $state(false);
@@ -98,8 +101,9 @@
   });
   $effect(() => {
     if (faculty.status !== 'in') loaded = false;
-    else if (open && active && !loaded) {
+    else if (open && active && (!loaded || faculty.stale)) {
       loaded = true;
+      faculty.stale = false;
       refresh();
     }
   });
@@ -141,7 +145,8 @@
       sks: (identitas.sksTeori ?? 0) + (identitas.sksPraktikum ?? 0), dosen: (identitas.dosenPengelola ?? []).filter((d) => d?.trim()),
       koordinator: identitas.koordinator ?? '', tglPenyusunan: identitas.tglPenyusunan ?? ''
     };
-    return { ...s, text: haystack({ ...s, fileName: null, tags: [s.createdByName, s.code] }), since: reviewSince(identitas), info };
+    const parts = searchParts({ ...s, fileName: null, tags: [s.createdByName, s.code] });
+    return { ...s, parts, text: parts.map((p) => p.text).join('\n').toLowerCase(), since: reviewSince(identitas), info };
   }
 
   const words = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
@@ -1234,6 +1239,7 @@
     const manage = canManage(s);
     return [
       { label: 'Buka', icon: 'open', hint: 'Enter', run: () => openSop(s) },
+      { label: 'Pratinjau', icon: 'eye', run: () => (previewOf = s) },
       { sep: true },
       { label: 'Detail', icon: 'info', run: () => (infoOf = s.id) },
       { label: 'Duplikat', icon: 'copy', run: () => duplicate(s) },
@@ -1652,9 +1658,11 @@
                   <small title={`Terakhir diubah ${when(s.updatedAt)} oleh ${s.updatedByName}`}>
                     {#if searching && folderOf(s)}<span>di {pathText(folderOf(s))}</span>{/if}{#if only === 'due'}<span>disusun {formatTanggal(s.since)}</span>{/if}<span>Diubah {ago(s.updatedAt)}</span>
                   </small>
+                  {#if words.length}<MatchSnippet parts={s.parts} {words} />{/if}
                   {#if editors}<small class="editing">🔒 Terkunci, sedang diedit oleh {editors}</small>{/if}
                 </button>
                 <span class="acts" role="group" aria-label="Tindakan RPS">
+                  {@render ib('eye', 'Pratinjau', () => (previewOf = s))}
                   {@render ib('copy', 'Duplikat sebagai milik Anda', () => duplicate(s))}
                   {@render ib('history', 'Riwayat', () => toggleHistory(s), { on: history?.id === s.id, expanded: history?.id === s.id })}
                   {@render ib('users', accessTip(s), () => openAccess('sops', s))}
@@ -1806,6 +1814,15 @@
 
 <SopInfoDialog {info} oncode={info && canEdit(live.find((x) => x.id === infoOf)) ? () => changeCode(live.find((x) => x.id === infoOf)) : undefined} onclose={() => (infoOf = null)} />
 <AccessDialog target={accessTarget} onsave={saveAccess} onclose={() => (accessTarget = null)} />
+<RpsPreviewDialog
+  item={previewOf && { title: titleOf(previewOf), json: previewOf.json, where: folderOf(previewOf) ? `Folder ${pathText(folderOf(previewOf))}` : 'Folder Utama' }}
+  onopen={() => {
+    const s = previewOf;
+    previewOf = null;
+    openSop(s);
+  }}
+  onclose={() => (previewOf = null)}
+/>
 
 {#if compare}
   <VersionDiffDialog
