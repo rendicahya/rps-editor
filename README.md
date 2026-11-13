@@ -79,6 +79,11 @@ Sudah ada:
     perubahan terakhir, dan hak akses. Isinya hasil yang tampil saat mencari atau menyaring; selain itu folder yang dibuka
     beserta subfoldernya (di Utama: seluruh pustaka yang bisa Anda lihat). Baris judul kolom dibekukan, berfilter, dan
     diulang di tiap halaman cetak (A4 mendatar).
+  - **Cadangan ZIP** (tombol unduh di atas daftar): mengunduh RPS sebagai berkas `.rps` dalam ZIP dengan susunan folder
+    yang sama, dari cakupan yang sama dengan daftar induk. Bisa juga dari klik kanan folder › **Unduh isinya sebagai
+    ZIP**, dari pilihan (**Unduh ZIP**), atau satu RPS (klik kanan › **Unduh berkas .rps**). ZIP ini bisa diunggah
+    kembali lewat **Unggah berkas .rps atau .zip**; foldernya ikut dibuat. Kode pustaka, hak akses, riwayat, komentar,
+    dan folder kosong tidak ikut.
   - **Duplikat** menghasilkan RPS milik penyalinnya dengan hak akses yang sama seperti aslinya: semua yang bisa
     melihat atau mengedit aslinya mendapat hak yang sama pada salinan (ditandai **Khusus** bila berbeda dari folder
     tempatnya).

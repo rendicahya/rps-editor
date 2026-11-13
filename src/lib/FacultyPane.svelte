@@ -20,6 +20,7 @@
   import { formatTanggal, todayIso } from './model.js';
   import { registerXlsx } from './register.js';
   import { downloadBlob } from './files.js';
+  import { rpsZip, rpsText, safeName } from './rpsZip.js';
   import { notes, copyLink, markMentionsSeen, unseenMentions } from './comments.svelte.js';
 
   /**
@@ -1084,6 +1085,47 @@
     lengkap = { title: folder || `${sops.length} RPS dipilih`, items: sops };
   }
 
+  // ---- Cadangan ZIP ----
+  /**
+   * Berkas ZIP dari entri `list`: RPS di akar ZIP, isi folder (dan subfoldernya) di bawah nama folder itu.
+   * Folder kosong tidak ikut karena ZIP hanya memuat berkas .rps.
+   */
+  function zipFiles(list) {
+    const files = [];
+    const seen = new Set();
+    const put = (s, dirs) => {
+      if (seen.has(s.id) || !s.json) return;
+      seen.add(s.id);
+      files.push({ dirs, name: titleOf(s), json: s.json, mtime: s.updatedAt });
+    };
+    const walk = (id, dirs, depth = 0) => {
+      if (depth > 50) return;
+      for (const s of sorted(live.filter((x) => folderOf(x) === id), 'name-asc', titleOf, (x) => x.updatedAt)) put(s, dirs);
+      for (const f of childrenOf(id)) walk(f.id, [...dirs, f.name], depth + 1);
+    };
+    for (const d of list) (d.isFolder ? walk(d.item.id, [d.item.name]) : d.root ? walk(null, []) : put(d.item, d.dirs ?? []));
+    return files;
+  }
+  function downloadZip(list, name) {
+    const files = zipFiles(list);
+    if (!files.length) return ui.alert('Tidak ada RPS untuk diunduh.', { title: 'Unduh ZIP' });
+    try {
+      downloadBlob(rpsZip(files), `${safeName(name).replace(/ /g, '-')}-${todayIso()}.zip`);
+      onnotify(`${files.length} RPS diunduh dalam berkas ZIP`);
+    } catch (e) {
+      ui.alert('ZIP gagal dibuat: ' + e.message, { title: 'Unduh ZIP' });
+    }
+  }
+  /** Tombol toolbar: hasil yang tampil saat mencari/menyaring (dengan jalur foldernya), selain itu folder ini atau seluruh pustaka. */
+  function downloadHere() {
+    if (searching) return downloadZip(shownLive.map((s) => ({ item: s, dirs: pathOf(folderOf(s)).map((f) => f.name) })), 'Hasil-pencarian-RPS');
+    if (here) return downloadZip([entryOf(byId.get(here), true)], byId.get(here).name);
+    downloadZip([{ root: true }], 'Pustaka-Daring-RPS');
+  }
+  function downloadRps(s) {
+    downloadBlob(new Blob([rpsText(s.json)], { type: 'application/json' }), `${safeName(titleOf(s))}.rps`);
+  }
+
   // ---- Hak akses ----
   function openAccess(kind, item) {
     const up = kind === 'folders' ? parents.get(item.id) : folderOf(item);
@@ -1134,6 +1176,7 @@
     return [
       { head: `${list.length} item dipilih` },
       { label: 'Gabung jadi satu PDF…', icon: 'book', run: () => makeBook(list) },
+      { label: 'Unduh sebagai ZIP', icon: 'download', run: () => downloadZip(list, 'RPS-terpilih') },
       { label: 'Rekap CPL…', icon: 'grid', run: () => makeRekap(list) },
       { label: 'Kelengkapan RPS…', icon: 'check', run: () => makeLengkap(list) },
       ...(withPrefix(list).length ? [{ label: `Pindahkan awalan nama ke kode (${withPrefix(list).length} RPS)…`, icon: 'pencil', run: () => prefixToCode(withPrefix(list)) }] : []),
@@ -1172,6 +1215,7 @@
       ...hereItems(f.id),
       { sep: true },
       { label: 'Gabung isinya jadi satu PDF…', icon: 'book', run: () => makeBook([entryOf(f, true)]), disabled: !sopsOf([entryOf(f, true)]).length },
+      { label: 'Unduh isinya sebagai ZIP', icon: 'download', run: () => downloadZip([entryOf(f, true)], f.name), disabled: !sopsOf([entryOf(f, true)]).length },
       { label: 'Rekap CPL isinya…', icon: 'grid', run: () => makeRekap([entryOf(f, true)]), disabled: !sopsOf([entryOf(f, true)]).length },
       { label: 'Kelengkapan RPS isinya…', icon: 'check', run: () => makeLengkap([entryOf(f, true)]), disabled: !sopsOf([entryOf(f, true)]).length },
       { label: accessTip(f), icon: 'users', run: () => openAccess('folders', f) },
@@ -1193,6 +1237,7 @@
       { sep: true },
       { label: 'Detail', icon: 'info', run: () => (infoOf = s.id) },
       { label: 'Duplikat', icon: 'copy', run: () => duplicate(s) },
+      { label: 'Unduh berkas .rps', icon: 'download', run: () => downloadRps(s) },
       { label: 'Riwayat', icon: 'history', run: () => toggleHistory(s) },
       { label: 'Bandingkan versi…', icon: 'compare', run: () => compareVersions(s) },
       { label: 'Salin tautan', icon: 'link', run: async () => onnotify(await copyLink(s.id)) },
@@ -1363,22 +1408,30 @@
   {#if selRows.length}
     {@const own = selRows.filter((d) => canManage(d.item))}
     {@const pre = withPrefix(selRows)}
+    {@const all = rows.every((r) => selected.has(r.key))}
     <div class="selbar" role="toolbar" aria-label="Tindakan untuk yang dipilih">
-      <strong>{selRows.length} dipilih</strong>
+      <label class="pickall" title={all ? 'Batal pilih (Esc)' : 'Pilih semua'}>
+        <input
+          type="checkbox"
+          class="pick"
+          checked={all}
+          indeterminate={!all}
+          onchange={() => (all ? selected.clear() : rows.forEach((r) => selected.add(r.key)))}
+        />
+        <strong>{selRows.length} dipilih</strong>
+      </label>
       {#if view === 'bin'}
         <button type="button" class="btn" onclick={() => restoreMany(selRows.map((d) => d.item))}><Icon name="restore" size={14} /> Pulihkan</button>
         <button type="button" class="btn danger" onclick={() => purgeMany(selRows.map((d) => d.item))}><Icon name="trash" size={14} /> Hapus permanen</button>
       {:else}
         <button type="button" class="btn" onclick={() => makeBook(selRows)} title="Gabungkan RPS yang dipilih (termasuk isi folder) menjadi satu PDF berdaftar isi"><Icon name="book" size={14} /> Gabung PDF</button>
+        <button type="button" class="btn" onclick={() => downloadZip(selRows, 'RPS-terpilih')} title="Unduh RPS yang dipilih (termasuk isi folder) sebagai berkas .rps dalam ZIP"><Icon name="download" size={14} /> Unduh ZIP</button>
         <button type="button" class="btn" onclick={() => makeRekap(selRows)} title="Matriks mata kuliah × CPL dari RPS yang dipilih (termasuk isi folder)"><Icon name="grid" size={14} /> Rekap CPL</button>
         <button type="button" class="btn" onclick={() => makeLengkap(selRows)} title="Laporan kelengkapan RPS yang dipilih (termasuk isi folder): hasil Periksa, komentar, dan mata kuliah katalog yang belum punya RPS"><Icon name="check" size={14} /> Kelengkapan</button>
         {#if pre.length}<button type="button" class="btn" onclick={() => prefixToCode(pre)} title="Awalan nama seperti B.2 dipindah ke kode pustaka"><Icon name="pencil" size={14} /> Awalan ke kode ({pre.length})</button>{/if}
         <button type="button" class="btn" disabled={!own.length} onclick={() => startMove(own)}><Icon name="move" size={14} /> Pindahkan</button>
         <button type="button" class="btn danger" disabled={!own.length} onclick={() => deleteMany(own)}><Icon name="trash" size={14} /> Hapus</button>
       {/if}
-      <span class="grow"></span>
-      <button type="button" class="link" onclick={() => rows.forEach((r) => selected.add(r.key))}>Pilih semua</button>
-      <button type="button" class="link" onclick={() => selected.clear()}>Batal pilih</button>
     </div>
   {/if}
 {/snippet}
@@ -1507,6 +1560,7 @@
             {@render ib('filter', filtering ? 'Filter (aktif)' : 'Filter', () => (filterOpen = !filterOpen), { on: filterOpen || filtering, expanded: filterOpen || filtering })}
             <SortSelect />
             {@render ib('table', searching ? 'Unduh daftar induk RPS (XLSX) dari hasil yang tampil' : here ? 'Unduh daftar induk RPS (XLSX) folder ini beserta subfoldernya' : 'Unduh daftar induk RPS (XLSX) seluruh pustaka', exportRegister)}
+            {@render ib('download', searching ? 'Unduh cadangan (ZIP) hasil yang tampil' : here ? 'Unduh cadangan (ZIP) folder ini beserta subfoldernya' : 'Unduh cadangan (ZIP) seluruh pustaka', downloadHere)}
             {#if here && !searching}
               {@render ib('users', accessTip(byId.get(here)), () => openAccess('folders', byId.get(here)))}
             {/if}
@@ -2230,7 +2284,13 @@
   }
   .selbar strong {
     color: var(--accent);
+  }
+  .pickall {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
     margin-right: 0.3rem;
+    cursor: pointer;
   }
   .selbar .btn {
     padding: 0.22rem 0.6rem;
@@ -2238,17 +2298,6 @@
   }
   .selbar .btn.danger {
     color: var(--danger);
-  }
-  .selbar .link {
-    border: 0;
-    background: none;
-    padding: 0.2rem 0.3rem;
-    color: var(--accent);
-    font: inherit;
-    cursor: pointer;
-  }
-  .selbar .link:hover {
-    text-decoration: underline;
   }
   .history {
     flex-basis: 100%;
