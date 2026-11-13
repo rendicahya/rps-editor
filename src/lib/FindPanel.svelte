@@ -1,4 +1,5 @@
 <script>
+  import Icon from './Icon.svelte';
   import { app } from './store.svelte.js';
   import { searchPattern, findMatches, replaceIn } from './findReplace.js';
 
@@ -40,13 +41,13 @@
   <div class="find" role="dialog" aria-label="Cari dan ganti">
     <div class="head">
       <strong>Cari &amp; ganti</strong>
-      <button class="icon" onclick={() => (open = false)} title="Tutup (Esc)">✕</button>
+      <button class="icon" onclick={() => (open = false)} title="Tutup (Esc)" aria-label="Tutup"><Icon name="x" size={14} /></button>
     </div>
     <input bind:this={input} bind:value={query} placeholder="Cari…" aria-label="Cari" />
     <input bind:value={replacement} placeholder="Ganti dengan…" aria-label="Ganti dengan" />
     <div class="row">
       <label class="check"><input type="checkbox" bind:checked={caseSensitive} /> Huruf besar/kecil</label>
-      <button class="btn small primary" disabled={!total} onclick={replaceAll}>Ganti semua</button>
+      <button class="btn small primary" disabled={!total} onclick={replaceAll}><Icon name="pencil" size={14} />Ganti semua</button>
     </div>
     {#if query}
       <p class="summary">

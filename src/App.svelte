@@ -31,6 +31,7 @@
   import * as ui from './lib/ask.svelte.js';
   import * as Faculty from './lib/faculty.svelte.js';
   import { faculty } from './lib/faculty.svelte.js';
+  import AdminDialog from './lib/AdminDialog.svelte';
   import DocMetaDialog from './lib/DocMetaDialog.svelte';
 
   let toast = $state(null); // { msg, action, n }
@@ -570,6 +571,8 @@
 
   // Dialog Pustaka, bertab Lokal dan Daring. Tab terakhir diingat di browser ini.
   let libraryOpen = $state(false);
+  let adminOpen = $state(false);
+  const isAdmin = $derived(faculty.status === 'in' && faculty.role === 'admin');
   let libraryTab = $state(
     (() => {
       try {
@@ -1303,7 +1306,7 @@
     aria-haspopup="dialog"
     title={fresh ? `${fresh} komentar baru menyebut Anda` : 'Buka RPS dari Pustaka Lokal atau Pustaka Daring'}
   >
-    Pustaka{#if fresh}<span class="mention-dot" aria-label="{fresh} sebutan baru">{fresh}</span>{/if}
+    <Icon name="book" size={15} />Pustaka{#if fresh}<span class="mention-dot" aria-label="{fresh} sebutan baru">{fresh}</span>{/if}
   </button>
 {/snippet}
 
@@ -1332,39 +1335,45 @@
       </div>
     </div>
     <nav class="toolbar">
-      <button class="btn ghost" onclick={newDoc} title="Dokumen baru">Baru</button>
-      <button class="btn ghost" onclick={open} title="Buka berkas .rps (Ctrl+O)">Buka</button>
-      <button class="btn ghost" onclick={openSample} title="Buka contoh RPS (Algoritma dan Struktur Data)">Contoh</button>
-      <button class="btn ghost" onclick={() => (curriculumOpen = true)} aria-haspopup="dialog" title="Katalog CPL/CPMK per prodi: pakai di RPS ini, atau kelola bila Anda pengelola prodi">Kurikulum</button>
-      <button class="btn ghost" onclick={() => (aiOpen = true)} aria-haspopup="dialog" title="Susun RPS baru, impor RPS lama (PDF/Word), atau revisi RPS ini dengan bantuan asisten AI">🪄 Asisten AI</button>
+      <button class="btn ghost" onclick={newDoc} title="Dokumen baru"><Icon name="filePlus" size={15} />Baru</button>
+      <button class="btn ghost" onclick={open} title="Buka berkas .rps (Ctrl+O)"><Icon name="folder" size={15} />Buka</button>
+      <button class="btn ghost" onclick={openSample} title="Buka contoh RPS (Algoritma dan Struktur Data)"><Icon name="file" size={15} />Contoh</button>
+      <button class="btn ghost" onclick={() => (curriculumOpen = true)} aria-haspopup="dialog" title="Katalog CPL/CPMK per prodi: pakai di RPS ini, atau kelola bila Anda pengelola prodi"><Icon name="book" size={15} />Kurikulum</button>
+      <button class="btn ghost" onclick={() => (aiOpen = true)} aria-haspopup="dialog" title="Susun RPS baru, impor RPS lama (PDF/Word), atau revisi RPS ini dengan bantuan asisten AI"><Icon name="sparkle" size={15} />Asisten AI</button>
       {@render libraryButton('btn ghost')}
       <div class="export">
         <button class="btn ghost" onclick={toggleSaveMenu} disabled={empty} aria-haspopup="menu" aria-expanded={saveOpen} title="Simpan ke Pustaka Lokal, Pustaka Daring, atau sebagai berkas .rps">
+          <Icon name="save" size={15} />
           Simpan
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
         </button>
         {#if saveOpen}
           <div class="export-menu left" role="menu">
             <button role="menuitem" onclick={() => ((saveOpen = false), saveToLibrary())}>
+              <Icon name="laptop" />
               <strong>Ke Pustaka Lokal{inLibrary ? ' ✓' : ''}</strong>
               <small>{inLibrary ? `Simpan perubahan ke RPS ini${activeTab?.remote ? '' : ' · Ctrl+S'}` : 'Disimpan di browser ini, buka lagi dari Pustaka Lokal'}</small>
             </button>
             <button role="menuitem" onclick={() => ((saveOpen = false), saveToFaculty())}>
+              <Icon name="cloud" />
               <strong>Ke Pustaka Daring{activeTab?.remote ? ' ✓' : ''}</strong>
               <small>{activeTab?.remote ? 'Simpan perubahan ke RPS daring ini · Ctrl+S' : 'Unggah sebagai RPS daring baru (private)'}</small>
             </button>
             <button role="menuitem" onclick={() => ((saveOpen = false), save(false))}>
+              <Icon name="save" />
               <strong>Sebagai berkas .rps</strong><small>{app.fileHandle ? `Timpa ${app.fileName}` : 'Pilih lokasi di perangkat'}{activeTab?.remote || inLibrary ? '' : ' · Ctrl+S'}</small>
             </button>
             <button role="menuitem" onclick={() => ((saveOpen = false), save(true))}>
+              <Icon name="filePlus" />
               <strong>Simpan berkas sebagai…</strong><small>Berkas .rps baru · Ctrl+Shift+S</small>
             </button>
           </div>
         {/if}
       </div>
+      {#if isAdmin}<button class="btn ghost adm-btn" onclick={() => (adminOpen = true)} aria-haspopup="dialog" aria-label="Admin" title="Admin: anggota, grup, dan penyimpanan"><Icon name="settings" size={15} /><span class="lbl">Admin</span></button>{/if}
       <span class="sep"></span>
-      <button class="icon" onclick={undo} disabled={!canUndo} title="Urungkan (Ctrl+Z)">↶</button>
-      <button class="icon" onclick={redo} disabled={!canRedo} title="Ulangi (Ctrl+Y)">↷</button>
+      <button class="icon" onclick={undo} disabled={!canUndo} title="Urungkan (Ctrl+Z)" aria-label="Urungkan"><Icon name="undo" /></button>
+      <button class="icon" onclick={redo} disabled={!canRedo} title="Ulangi (Ctrl+Y)" aria-label="Ulangi"><Icon name="redo" /></button>
       <button class="icon" class:on={findOpen} onclick={() => (findOpen = !findOpen)} title="Cari & ganti (Ctrl+F)" aria-label="Cari dan ganti">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
       </button>
@@ -1386,6 +1395,7 @@
         onclick={() => (checkOpen = !checkOpen)}
         title={issueErrors + issueWarns ? `${issueErrors} salah, ${issueWarns} peringatan` : 'Tidak ada temuan'}
       >
+        <Icon name="checklist" size={15} />
         Periksa
         {#if issueErrors + issueWarns}
           <span class="badge" class:err={issueErrors}>{issueErrors + issueWarns}</span>
@@ -1406,26 +1416,32 @@
       </button>
       <div class="export">
         <button class="btn primary" onclick={() => ((saveOpen = false), (exportOpen = !exportOpen))} aria-haspopup="menu" aria-expanded={exportOpen} disabled={!!exportBusy || empty}>
+          <Icon name="export" size={15} />
           {exportBusy ? `Membuat ${exportBusy}…` : 'Ekspor'}
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6" /></svg>
         </button>
         {#if exportOpen}
           <div class="export-menu" role="menu">
             <button role="menuitem" onclick={() => ((exportOpen = false), pdf())}>
+              <Icon name="file" />
               <strong>PDF</strong><small>Pratinjau lalu unduh · Ctrl+Shift+P</small>
             </button>
             <button role="menuitem" onclick={() => ((exportOpen = false), printPdf())}>
+              <Icon name="print" />
               <strong>Cetak</strong><small>Langsung ke printer, sama dengan PDF · Ctrl+P</small>
             </button>
             <button role="menuitem" onclick={() => ((exportOpen = false), exportDocxFile())}>
+              <Icon name="fileText" />
               <strong>Word (.docx)</strong><small>Tabel Word yang bisa diedit; bisa dibuka lagi di sini</small>
             </button>
             {#if tabs.list.length > 1}
               <button role="menuitem" onclick={() => ((exportOpen = false), bookFromTabs())}>
+                <Icon name="book" />
                 <strong>PDF gabungan semua tab…</strong><small>{tabs.list.length} RPS dalam satu PDF berdaftar isi</small>
               </button>
             {/if}
             <button role="menuitem" class="sep" onclick={() => ((exportOpen = false), (metaOpen = true))}>
+              <Icon name="info" />
               <strong>Properti dokumen…</strong><small>Judul, penulis, subjek, dan kata kunci berkas</small>
             </button>
           </div>
@@ -1486,7 +1502,7 @@
           <button class="close" onclick={() => closeTab(t.id)} title="Tutup tab (Alt+W)" aria-label="Tutup {tabTitle(t)}">×</button>
         </div>
       {/each}
-      <button class="add" onclick={() => addTab(emptyDocument())} title="Tab baru" aria-label="Tab baru">+</button>
+      <button class="add" onclick={() => addTab(emptyDocument())} title="Tab baru (dokumen kosong)"><Icon name="plus" size={14} /><span>Tab baru</span></button>
     </div>
     <FormatBar />
     <span class="tab-sep"></span>
@@ -1520,7 +1536,7 @@
           </span>
           <span class="actions">
             {#if canQueryFonts}<button class="btn small primary" onclick={() => setCalibri(useSystemCalibri)}>Pakai Calibri perangkat</button>{/if}
-            <button class="btn small" onclick={() => fontFiles.click()}>Pilih file Calibri…</button>
+            <button class="btn small" onclick={() => fontFiles.click()}><Icon name="upload" size={14} />Pilih file Calibri…</button>
           </span>
           <input
             bind:this={fontFiles}
@@ -1541,9 +1557,9 @@
           <strong>Tidak ada RPS yang terbuka</strong>
           <span>Buat RPS baru, buka berkas, buka contoh, atau pilih dari Pustaka.</span>
           <span class="actions">
-            <button class="btn primary" onclick={newDoc}>Baru</button>
-            <button class="btn" onclick={open}>Buka</button>
-            <button class="btn" onclick={openSample}>Contoh</button>
+            <button class="btn primary" onclick={newDoc}><Icon name="filePlus" size={15} />Baru</button>
+            <button class="btn" onclick={open}><Icon name="folder" size={15} />Buka</button>
+            <button class="btn" onclick={openSample}><Icon name="file" size={15} />Contoh</button>
             {@render libraryButton('btn')}
           </span>
         </div>
@@ -1568,7 +1584,7 @@
   {#if $needRefresh}
     <div class="banner">
       Versi baru tersedia.
-      <button class="btn small primary" onclick={() => updateServiceWorker(true)}>Muat ulang</button>
+      <button class="btn small primary" onclick={() => updateServiceWorker(true)}><Icon name="refresh" size={14} />Muat ulang</button>
       <button class="btn small ghost" onclick={() => needRefresh.set(false)}>Nanti</button>
     </div>
   {:else if $offlineReady}
@@ -1600,6 +1616,8 @@
   />
   {#if tabMenu}<ContextMenu x={tabMenu.x} y={tabMenu.y} items={tabMenu.items} onclose={() => (tabMenu = null)} />{/if}
   <CheckPanel bind:open={checkOpen} {issues} doc={app.doc} onjump={jumpTo} />
+
+  <AdminDialog bind:open={adminOpen} onnotify={notify} />
   <LibraryDialog
     bind:open={libraryOpen}
     bind:tab={libraryTab}
@@ -1662,21 +1680,21 @@
     <strong>RPS Editor</strong>
     {#if faculty.status === 'out'}
       <p>Aplikasi ini hanya untuk akun yang sudah didaftarkan admin. Masuk dengan akun Google Anda.</p>
-      <button class="btn primary" onclick={() => Faculty.signIn().catch((e) => ui.alert(e.message))}>Masuk dengan Google</button>
+      <button class="btn primary" onclick={() => Faculty.signIn().catch((e) => ui.alert(e.message))}><Icon name="login" size={15} />Masuk dengan Google</button>
     {:else if faculty.status === 'domain' || faculty.status === 'notMember'}
       <p>
         Akun <b>{faculty.user?.email}</b> belum terdaftar.
         {faculty.status === 'domain' ? 'Hanya akun @ub.ac.id atau @gmail.com yang bisa didaftarkan.' : 'Hubungi admin untuk didaftarkan.'}
       </p>
       <div class="gate-actions">
-        <button class="btn primary" onclick={() => Faculty.signOut().then(() => Faculty.signIn()).catch((e) => ui.alert(e.message))}>Ganti akun</button>
-        <button class="btn" onclick={() => Faculty.signOut()}>Keluar</button>
+        <button class="btn primary" onclick={() => Faculty.signOut().then(() => Faculty.signIn()).catch((e) => ui.alert(e.message))}><Icon name="users" size={15} />Ganti akun</button>
+        <button class="btn" onclick={() => Faculty.signOut()}><Icon name="logout" size={15} />Keluar</button>
       </div>
     {:else if faculty.status === 'error'}
       <p class="error">{faculty.error}</p>
       <div class="gate-actions">
-        <button class="btn primary" onclick={() => (faculty.user ? Faculty.recheck() : Faculty.start())}>Coba lagi</button>
-        {#if faculty.user}<button class="btn" onclick={() => Faculty.signOut()}>Keluar</button>{/if}
+        <button class="btn primary" onclick={() => (faculty.user ? Faculty.recheck() : Faculty.start())}><Icon name="refresh" size={15} />Coba lagi</button>
+        {#if faculty.user}<button class="btn" onclick={() => Faculty.signOut()}><Icon name="logout" size={15} />Keluar</button>{/if}
       </div>
     {:else}
       <p>Memuat…</p>

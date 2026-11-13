@@ -117,6 +117,12 @@ textarea {
   gap: 0.3rem;
   flex-wrap: wrap;
 }
+/* Label Admin disembunyikan di layar sedang agar toolbar tetap satu baris dengan judul aplikasi. */
+@media (max-width: 1500px) {
+  .toolbar .adm-btn .lbl {
+    display: none;
+  }
+}
 /* Tab dokumen */
 .tabbar {
   display: flex;
@@ -288,19 +294,28 @@ textarea {
 .tabbar .add {
   flex: none;
   align-self: center;
-  width: 1.8rem;
-  height: 1.8rem;
-  margin-left: 0.2rem;
-  border: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  height: 1.75rem;
+  margin-left: 0.35rem;
+  padding: 0 0.6rem;
+  border: 1px solid var(--line);
   border-radius: 6px;
-  background: none;
-  font-size: 1.15rem;
-  color: var(--muted);
+  background: var(--surface);
+  font: 600 0.8rem var(--ui-font);
+  white-space: nowrap;
+  color: var(--accent);
   cursor: pointer;
 }
 .tabbar .add:hover:not(:disabled) {
-  background: var(--bg);
-  color: var(--text);
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+@media (max-width: 640px) {
+  .tabbar .add span {
+    display: none;
+  }
 }
 .tabbar .add:disabled {
   opacity: 0.4;
@@ -526,7 +541,7 @@ textarea:focus {
   right: 0;
   top: calc(100% + 4px);
   z-index: 50;
-  min-width: 15rem;
+  min-width: 18rem;
   padding: 0.3rem;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -563,6 +578,29 @@ textarea:focus {
 .export-menu small {
   color: var(--muted);
   font-size: 0.75rem;
+}
+/* Item menu berikon: ikon di kiri, judul dan keterangan di kanannya. */
+.export-menu button:has(> svg) {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.6rem;
+  row-gap: 0.1rem;
+  align-items: start;
+}
+.export-menu button > svg {
+  grid-row: 1 / span 2;
+  margin-top: 0.1rem;
+  color: var(--muted);
+}
+.export-menu button:hover > svg,
+.export-menu button:focus-visible > svg {
+  color: var(--accent);
+}
+.export-menu button > :not(svg) {
+  grid-column: 2;
+}
+.export-menu button > strong {
+  white-space: nowrap;
 }
 
 .icon {

@@ -165,7 +165,7 @@
             <option value="view">Lihat</option>
             <option value="edit">Edit</option>
           </select>
-          <button type="button" class="ib" aria-label="Tambahkan" data-tip="Tambahkan ke daftar" onclick={add}><Icon name="plus" /></button>
+          <button type="button" class="btn primary add-btn" disabled={!who.trim()} onclick={add}><Icon name="plus" size={15} />Tambah</button>
         </div>
         {#if error}<p class="error">{error}</p>{/if}
       {/if}
@@ -181,7 +181,7 @@
       <footer>
         {#if manage}
           <button type="button" class="btn" onclick={onclose}>Batal</button>
-          <button class="btn primary">Simpan</button>
+          <button class="btn primary"><Icon name="save" size={15} />Simpan</button>
         {:else}
           <button type="button" class="btn" onclick={onclose}>Tutup</button>
         {/if}
@@ -301,6 +301,14 @@
   .add input {
     flex: 1;
     min-width: 0;
+  }
+  .add-btn {
+    flex: none;
+    white-space: nowrap;
+  }
+  .add-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
   .ib {
     display: inline-flex;

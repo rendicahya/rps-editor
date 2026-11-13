@@ -1,4 +1,5 @@
 <script>
+  import Icon from './Icon.svelte';
   import Preview from './Preview.svelte';
   import { dismiss } from './dismiss.js';
   import { WATERMARKS } from './pdf.js';
@@ -114,9 +115,9 @@
         <input bind:value={name} aria-label="Nama berkas PDF" onkeydown={(e) => e.key === 'Enter' && download()} />
         <span>.pdf</span>
       </label>
-      <button type="button" class="btn" onclick={() => (pdf = null)}>Kembali ke editor</button>
-      <button type="button" class="btn" disabled={busy} onclick={print} title="Cetak PDF ini lewat printer (Ctrl+P)">Cetak</button>
-      <button type="button" class="btn primary" disabled={busy} onclick={download}>Unduh PDF</button>
+      <button type="button" class="btn" onclick={() => (pdf = null)}><Icon name="arrowLeft" size={15} />Kembali ke editor</button>
+      <button type="button" class="btn" disabled={busy} onclick={print} title="Cetak PDF ini lewat printer (Ctrl+P)"><Icon name="print" size={15} />Cetak</button>
+      <button type="button" class="btn primary" disabled={busy} onclick={download}><Icon name="download" size={15} />Unduh PDF</button>
     </div>
   </header>
   <div class="opts">
@@ -155,7 +156,7 @@
       />
     {/if}
     {#if onmeta}
-      <button type="button" class="btn ghost meta" onclick={onmeta} title="Judul, penulis, subjek, dan kata kunci di metadata PDF">Properti dokumen…</button>
+      <button type="button" class="btn ghost meta" onclick={onmeta} title="Judul, penulis, subjek, dan kata kunci di metadata PDF"><Icon name="info" size={14} />Properti dokumen…</button>
     {/if}
     {#if busy}<span class="busy">Membuat ulang PDF…</span>{/if}
   </div>

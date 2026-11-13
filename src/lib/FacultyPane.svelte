@@ -15,8 +15,11 @@
   import VersionDiffDialog from './VersionDiffDialog.svelte';
   import ProdiRekapDialog from './ProdiRekapDialog.svelte';
   import KelengkapanDialog from './KelengkapanDialog.svelte';
-  import { review, setReviewYears, REVIEW_CHOICES, reviewSince, isReviewDue } from './review.svelte.js';
-  import { formatTanggal } from './model.js';
+  import SopInfoDialog from './SopInfoDialog.svelte';
+  import { review, setReviewYears, REVIEW_CHOICES, reviewSince, reviewDue, isReviewDue } from './review.svelte.js';
+  import { formatTanggal, todayIso } from './model.js';
+  import { registerXlsx } from './register.js';
+  import { downloadBlob } from './files.js';
   import { notes, copyLink, markMentionsSeen, unseenMentions } from './comments.svelte.js';
 
   /**
@@ -33,7 +36,7 @@
   let { open = false, active = false, host, tabs, onclose, openIds = [], cansave = true, onopen, onupload, oncreate, onloaded, onrenamed, onbinned, onnotify, tabjson, onrestoretab, onbook, onopencomment } = $props();
 
   let moveDialog;
-  let view = $state('sops'); // sops | bin | admin
+  let view = $state('sops'); // sops | mentions | bin
   let live = $state([]);
   let bin = $state([]);
   let folders = $state([]);
@@ -41,6 +44,7 @@
   const expanded = new SvelteSet();
   let moving = $state(null); // { item, isFolder, target }
   let accessTarget = $state(null);
+  let infoOf = $state(null); // RPS yang detailnya sedang ditampilkan
   let menu = $state(null); // { x, y, items }
   let query = $state('');
   let busy = $state(false);
@@ -48,14 +52,20 @@
   let history = $state(null); // { id, versions }
   let compare = $state(null); // { title, sources, left, right } untuk dialog Bandingkan versi
   let only = $state(''); // '' | 'due' (perlu ditinjau) | 'notes' (ada komentar terbuka): dari semua folder
-  let usage = $state(null);
-  let members = $state([]);
-  let newEmail = $state('');
-  let newRole = $state('member');
-  let newGroup = $state(''); // grup untuk anggota baru; '' = tanpa grup
-  let groups = $state([]);
-  let groupName = $state('');
-  let openGroup = $state(null); // id grup yang daftar anggotanya sedang dibuka
+  let groups = $state([]); // untuk nama grup di lencana hak akses
+  // Filter daftar RPS (berlaku di semua folder, bersama pencarian). '' = tidak menyaring.
+  const NO_FILTER = { owner: '', access: '', changed: '', code: '' };
+  let filt = $state({ ...NO_FILTER });
+  let filterOpen = $state(false);
+  const filtering = $derived(Object.values(filt).some(Boolean));
+  const resetFilters = () => Object.assign(filt, NO_FILTER);
+  const CHANGED = [
+    ['7', 'dalam 7 hari terakhir'],
+    ['30', 'dalam 30 hari terakhir'],
+    ['90', 'dalam 3 bulan terakhir'],
+    ['365', 'dalam 1 tahun terakhir'],
+    ['old', 'lebih dari 1 tahun lalu']
+  ];
 
   const admin = $derived(faculty.status === 'in' && faculty.role === 'admin');
 
@@ -67,6 +77,8 @@
       query = '';
       history = null;
       only = '';
+      resetFilters();
+      filterOpen = false;
       view = 'sops';
       // Dibuka dari angka sebutan baru di tombol Pustaka: langsung ke daftar "Menyebut saya".
       untrack(() => {
@@ -92,10 +104,6 @@
   });
 
   $effect(() => {
-    if (open && active && faculty.status === 'in' && view === 'admin') refreshAdmin();
-  });
-
-  $effect(() => {
     if (moving && !moveDialog.open) moveDialog.showModal();
     else if (!moving && moveDialog.open) moveDialog.close();
   });
@@ -104,7 +112,9 @@
     busy = true;
     loadError = '';
     try {
-      const [r, f] = await Promise.all([F.listSops(), F.listFolders()]);
+      // Grup ikut dibaca (koleksi kecil) agar lencana hak akses menampilkan namanya, bukan sekadar jumlah.
+      const [r, f, g] = await Promise.all([F.listSops(), F.listFolders(), F.listGroups().catch(() => groups)]);
+      groups = g;
       // Penyebaran hak akses tidak boleh menghalangi tampilnya daftar; yang gagal dicoba lagi saat dimuat berikutnya.
       await F.reconcileAccess(f, [...r.live, ...r.bin]).catch(() => {});
       live = r.live.map(withText);
@@ -124,13 +134,42 @@
     try {
       identitas = JSON.parse(s.json).identitas ?? {};
     } catch {}
-    return { ...s, text: haystack({ ...s, fileName: null, tags: [s.createdByName] }), since: reviewSince(identitas) };
+    // Isian identitas untuk Detail dan daftar induk.
+    const info = {
+      kode: identitas.kode ?? '', prodi: identitas.prodi ?? '', semester: identitas.semester ?? '', tahunAkademik: identitas.tahunAkademik ?? '',
+      sks: (identitas.sksTeori ?? 0) + (identitas.sksPraktikum ?? 0), dosen: (identitas.dosenPengelola ?? []).filter((d) => d?.trim()),
+      koordinator: identitas.koordinator ?? '', tglPenyusunan: identitas.tglPenyusunan ?? ''
+    };
+    return { ...s, text: haystack({ ...s, fileName: null, tags: [s.createdByName, s.code] }), since: reviewSince(identitas), info };
   }
 
   const words = $derived(query.trim().toLowerCase().split(/\s+/).filter(Boolean));
   const isDue = (s) => isReviewDue(s.since, review.years);
-  const matches = (s) => words.every((w) => s.text.includes(w)) && (!only || (only === 'due' ? isDue(s) : openCount(s) > 0));
-  const searching = $derived(words.length > 0 || !!only);
+  const DAY = 86400000;
+  function passFilter(s) {
+    const f = filt;
+    if (f.owner && s.createdByEmail !== f.owner) return false;
+    if (f.access) {
+      const readers = s.readers ?? [];
+      if (f.access === 'private' ? F.isShared(s) : !readers.includes(f.access)) return false;
+    }
+    if (f.changed) {
+      const age = Date.now() - s.updatedAt;
+      if (f.changed === 'old' ? age <= 365 * DAY : age > Number(f.changed) * DAY) return false;
+    }
+    if (f.code && (f.code === 'with') !== !!s.code) return false;
+    return true;
+  }
+  const matchText = (s) => words.every((w) => s.text.includes(w));
+  const matches = (s) => matchText(s) && (!only || (only === 'due' ? isDue(s) : openCount(s) > 0)) && passFilter(s);
+  const searching = $derived(words.length > 0 || !!only || filtering);
+  /** Pilihan filter Pemilik: pembuat RPS yang terlihat, akun ini paling atas. */
+  const owners = $derived.by(() => {
+    const m = new Map();
+    for (const s of live) if (s.createdByEmail && !m.has(s.createdByEmail)) m.set(s.createdByEmail, s.createdByName || s.createdByEmail);
+    const me = faculty.user?.email;
+    return [...m].sort(([a, x], [b, y]) => (b === me) - (a === me) || x.localeCompare(y, 'id'));
+  });
   const dueCount = $derived(live.filter(isDue).length);
 
   // ---- Komentar terbuka per RPS (dihitung sekali tiap daftar dimuat; RPS di tab aktif mengikuti panel komentar) ----
@@ -157,7 +196,7 @@
   const mentions = $derived([...notes.mine].sort((a, b) => b.at - a.at));
   const sopById = $derived(new Map(live.map((s) => [s.id, s])));
   const shortText = (t, n = 160) => (t.length > n ? t.slice(0, n) + '…' : t);
-  const shownBin = $derived(bin.filter(matches));
+  const shownBin = $derived(bin.filter(matchText));
 
   // ---- Folder ----
   const byId = $derived(new Map(folders.map((f) => [f.id, f])));
@@ -242,7 +281,7 @@
   });
   const shownFolders = $derived(
     sorted(
-      only ? [] : searching ? folders.filter((f) => words.every((w) => f.name.toLowerCase().includes(w))) : childrenOf(here),
+      only || filtering ? [] : searching ? folders.filter((f) => words.every((w) => f.name.toLowerCase().includes(w))) : childrenOf(here),
       librarySort.by,
       (f) => f.name,
       (f) => activity.get(f.id) ?? 0
@@ -285,7 +324,7 @@
   const selRows = $derived(rows.filter((r) => selected.has(r.key)));
   // Pilihan dikosongkan setiap pindah folder, tampilan, atau pencarian.
   $effect(() => {
-    view, here, query, only;
+    view, here, query, only, filt.owner, filt.access, filt.changed, filt.code;
     untrack(() => {
       selected.clear();
       anchor = null;
@@ -453,7 +492,7 @@
     const t = e.target;
     const typing = t.matches?.('input:not(.pick), textarea, select, [contenteditable]');
     const ctrl = e.ctrlKey || e.metaKey;
-    if (ctrl && e.key === 'f' && view !== 'admin') {
+    if (ctrl && e.key === 'f') {
       search?.focus();
       search?.select();
     } else if (typing) return;
@@ -469,6 +508,7 @@
     folderId = id;
     query = '';
     only = '';
+    resetFilters();
     history = null;
     for (const f of pathOf(id)) expanded.add(f.id);
   }
@@ -764,7 +804,22 @@
     await refresh();
   }
 
-  const titleOf = (s) => s.title || 'RPS tanpa judul';
+  /** Nama di pustaka: kode pustaka (bila ada) lalu nama RPS. Kodenya tidak ikut ke isi RPS. */
+  const titleOf = (s) => [s.code, s.title || 'RPS tanpa judul'].filter(Boolean).join(' ');
+
+  async function changeCode(s) {
+    const raw = await ui.prompt('Kode hanya tampil di pustaka sebagai awalan nama, misalnya A.1 atau Smt-3, dan tidak tampil di dokumen RPS. Kosongkan untuk menghapus kode.', s.code ?? '', { title: 'Kode pustaka', ok: 'Simpan', maxlength: 40 });
+    if (raw == null) return;
+    const code = raw.trim().replace(/\s+/g, ' ').slice(0, 40);
+    if (code === (s.code ?? '')) return;
+    try {
+      await F.setSopCode(s.id, code);
+      live = live.map((x) => (x.id === s.id ? { ...x, code } : x));
+      onnotify(code ? 'Kode pustaka disimpan' : 'Kode pustaka dihapus');
+    } catch (e) {
+      ui.alert(e.message);
+    }
+  }
   const isOpen = (s) => openIds.includes(s.id);
 
   /** RPS kosong dibuat di `folder` lalu langsung dibuka di tab baru. */
@@ -1011,14 +1066,19 @@
     accessTarget = null;
     act(() => F.setAccess(kind, item.id, data), 'Hak akses disimpan');
   }
-  /** Ringkasan siapa yang bisa melihat, untuk lencana di daftar. */
-  function accessLabel(item) {
+  /** Lencana siapa yang bisa melihat, untuk daftar: satu tag per grup (nama grup), lalu jumlah orang. */
+  const nameOfGroup = (id) => groups.find((g) => g.id === id)?.name;
+  function accessTags(item) {
     const readers = item.readers ?? [];
-    if (readers.includes(F.EVERYONE)) return 'Semua anggota';
+    if (readers.includes(F.EVERYONE)) return ['Semua anggota'];
     const others = readers.filter((r) => r !== item.createdByEmail);
-    const nGroups = others.filter(F.isGroup).length;
-    const nPeople = others.length - nGroups;
-    return [nGroups && `${nGroups} grup`, nPeople && `${nPeople} orang`].filter(Boolean).join(' · ') || 'Private';
+    const ids = others.filter(F.isGroup);
+    // Grup yang sudah dihapus atau belum termuat dihitung saja, tanpa nama.
+    const named = ids.map(nameOfGroup).filter(Boolean).sort((a, b) => a.localeCompare(b, 'id'));
+    const unnamed = ids.length - named.length;
+    const nPeople = others.length - ids.length;
+    const tags = [...named, unnamed && `${unnamed} grup`, nPeople && `${nPeople} orang`].filter(Boolean);
+    return tags.length ? tags : ['Private'];
   }
   const accessTip = (item) => (canManage(item) ? 'Atur hak akses' : 'Lihat hak akses');
 
@@ -1102,13 +1162,14 @@
     return [
       { label: 'Buka', icon: 'open', hint: 'Enter', run: () => openSop(s) },
       { sep: true },
+      { label: 'Detail', icon: 'info', run: () => (infoOf = s.id) },
       { label: 'Duplikat', icon: 'copy', run: () => duplicate(s) },
       { label: 'Riwayat', icon: 'history', run: () => toggleHistory(s) },
       { label: 'Bandingkan versi…', icon: 'compare', run: () => compareVersions(s) },
       { label: 'Salin tautan', icon: 'link', run: async () => onnotify(await copyLink(s.id)) },
       ...(manage ? [{ label: 'Hapus riwayat lama…', icon: 'trash', run: () => pruneOld(s) }] : []),
       { label: accessTip(s), icon: 'users', run: () => openAccess('sops', s) },
-      ...(canEdit(s) ? [{ label: 'Ubah nama', icon: 'pencil', hint: 'F2', run: () => rename(s) }] : []),
+      ...(canEdit(s) ? [{ label: 'Ubah nama', icon: 'pencil', hint: 'F2', run: () => rename(s) }, { label: 'Ubah kode pustaka…', icon: 'pencil', run: () => changeCode(s) }] : []),
       ...(manage
         ? [
             { label: 'Pindahkan', icon: 'move', run: () => moveSop(s) },
@@ -1129,97 +1190,122 @@
   const uploadBlocked = $derived(!canAdd(here) ? noAddTip : !cansave ? 'Dokumen ini kosong atau sudah tertaut ke Pustaka Daring' : '');
   const uploadTip = $derived(uploadBlocked || (here ? `Unggah dokumen ini ke ${byId.get(here).name}` : 'Unggah dokumen ini ke Utama'));
 
-  // ---- Admin ----
-  async function refreshAdmin() {
-    try {
-      [usage, members, groups] = await Promise.all([F.getUsage(), F.listMembers(), F.listGroups()]);
-    } catch (e) {
-      ui.alert(e.message);
-    }
-  }
-  const adminAct = (fn) => fn().catch((e) => ui.alert(e.message)).finally(refreshAdmin);
-
-  /** Email dari teks yang dipisah koma, spasi, titik koma, atau baris; "Nama <email>" juga diterima. */
-  function parseEmails(text) {
-    const good = new Set();
-    const bad = [];
-    for (const raw of text.split(/[\s,;]+/)) {
-      const t = raw.replace(/^[<("'[]+|[>)"'\]]+$/g, '').toLowerCase();
-      if (!t.includes('@')) continue; // potongan nama, mis. dari "Nama Lengkap <email>"
-      if (/^[^@\s/]+@(ub\.ac\.id|gmail\.com)$/.test(t)) good.add(t);
-      else bad.push(raw);
-    }
-    return { good: [...good], bad };
-  }
-  const emailCount = $derived(parseEmails(newEmail).good.length);
-
-  async function addMember(e) {
-    e?.preventDefault();
-    const { good, bad } = parseEmails(newEmail);
-    if (!good.length) return ui.alert('Masukkan alamat email @ub.ac.id atau @gmail.com. Beberapa email bisa dipisah koma, spasi, titik koma, atau baris baru.');
-    if (bad.length && !(await ui.confirm(`${bad.length} alamat dilewati karena bukan email @ub.ac.id atau @gmail.com yang sah:\n${bad.join(', ')}\n\nTetap tambahkan ${good.length} email lainnya?`, { title: 'Tambah anggota', ok: 'Tambahkan' }))) return;
-    const known = new Set(members.map((m) => m.email));
-    const fresh = good.filter((x) => !known.has(x));
-    const role = newRole;
-    const group = newGroup;
-    try {
-      await F.addMembers(good, role, group, members);
-      newEmail = '';
-      const already = good.length - fresh.length;
-      const gname = group ? groups.find((g) => g.id === group)?.name : '';
-      if (good.length > 1 || already) {
-        ui.alert(
-          `${fresh.length} anggota baru ditambahkan${fresh.length ? ` sebagai ${role === 'admin' ? 'admin' : 'anggota'}` : ''}.` +
-            (already ? ` ${already} sudah terdaftar${gname ? ` dan dimasukkan ke grup ${gname}` : ''}; perannya tidak diubah.` : '') +
-            (bad.length ? ` ${bad.length} alamat tidak sah dilewati.` : ''),
-          { title: 'Tambah anggota' }
-        );
-      }
-    } catch (err) {
-      ui.alert(err.message);
-    } finally {
-      refreshAdmin();
-    }
-  }
-
-  const groupNames = (m) => m.groups.map((id) => groups.find((g) => g.id === id)?.name).filter(Boolean);
-  const inGroup = (g) => members.filter((m) => m.groups.includes(g.id));
-  const cleanName = (s) => s.trim().replace(/\s+/g, ' ').slice(0, 80);
-  function addGroup(e) {
-    e.preventDefault();
-    const name = cleanName(groupName);
-    if (!name) return;
-    if (groups.some((g) => g.name.toLowerCase() === name.toLowerCase())) return ui.alert(`Grup ${name} sudah ada.`);
-    groupName = '';
-    adminAct(async () => (openGroup = await F.createGroup(name)));
-  }
-  async function renameGroup(g) {
-    const name = cleanName((await ui.prompt('Nama grup', g.name, { title: 'Ubah nama grup', ok: 'Simpan', maxlength: 80 })) ?? '');
-    if (!name || name === g.name) return;
-    if (groups.some((x) => x.id !== g.id && x.name.toLowerCase() === name.toLowerCase())) return ui.alert(`Grup ${name} sudah ada.`);
-    adminAct(() => F.renameGroup(g.id, name));
-  }
-  async function deleteGroup(g) {
-    const msg = `Hapus grup ${g.name}? Anggotanya tetap terdaftar, tetapi hak akses yang diberikan lewat grup ini tidak berlaku lagi.`;
-    if (await ui.confirm(msg, { ok: 'Hapus', danger: true })) adminAct(() => F.deleteGroup(g.id, members));
-  }
-  function toggleInGroup(g, m, on) {
-    const emails = inGroup(g).map((x) => x.email).filter((x) => x !== m.email);
-    adminAct(() => F.setGroupMembers(g.id, on ? [...emails, m.email] : emails, members));
-  }
-  async function removeMember(m) {
-    if (await ui.confirm(`Cabut akses ${m.email}? RPS buatannya tetap ada.`, { ok: 'Cabut akses', danger: true })) adminAct(() => F.removeMember(m.email));
-  }
-  async function changeLimit() {
-    const raw = await ui.prompt('Batas penyimpanan (MB)', String(Math.round(usage.limit / 1e6)), { title: 'Ubah batas penyimpanan', ok: 'Simpan', type: 'number' });
-    const v = Number(raw);
-    if (raw && v > 0) adminAct(() => F.setLimit(Math.round(v * 1e6)));
-  }
-  const recount = () => adminAct(() => F.recountUsage());
-
   const size = (n) => (n >= 1e6 ? `${(n / 1e6).toLocaleString('id-ID', { maximumFractionDigits: 1 })} MB` : `${Math.ceil(n / 1000).toLocaleString('id-ID')} KB`);
   const when = (ms) => new Date(ms).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
-  const percent = $derived(usage ? Math.min(100, (usage.bytes / usage.limit) * 100) : 0);
+  // "5 menit yang lalu" dan seterusnya; `now` diperbarui tiap menit selama pustaka terbuka.
+  let now = $state(Date.now());
+  $effect(() => {
+    if (!open) return;
+    now = Date.now();
+    const t = setInterval(() => (now = Date.now()), 60000);
+    return () => clearInterval(t);
+  });
+  const rtf = new Intl.RelativeTimeFormat('id', { numeric: 'always' });
+  function ago(ms) {
+    let v = Math.max(0, now - ms) / 60000;
+    if (v < 1) return 'baru saja';
+    let unit = 'minute';
+    for (const [n, u] of [[60, 'minute'], [24, 'hour'], [7, 'day'], [365.25 / 12 / 7, 'week'], [12, 'month'], [Infinity, 'year']]) {
+      unit = u;
+      if (v < n) break;
+      v /= n;
+    }
+    return rtf.format(-Math.floor(v), unit);
+  }
+
+  /** RPS di folder `id` beserta subfoldernya; null = semua. */
+  function within(s, id) {
+    if (!id) return true;
+    for (let f = folderOf(s), n = 0; f && n < 100; f = parents.get(f), n++) if (f === id) return true;
+    return false;
+  }
+  /**
+   * Daftar induk RPS (XLSX). Saat mencari atau menyaring: hasil yang tampil. Selain itu: folder ini beserta
+   * subfoldernya (di Utama berarti seluruh pustaka yang bisa dilihat akun ini).
+   */
+  function exportRegister() {
+    const list = sorted(searching ? shownLive : live.filter((s) => within(s, here)), 'name-asc', titleOf, (s) => s.updatedAt);
+    if (!list.length) return ui.alert('Tidak ada RPS untuk dimasukkan ke daftar induk.', { title: 'Daftar induk RPS' });
+    const scope = searching ? 'Hasil pencarian atau filter' : here ? `Folder ${pathText(here)} beserta subfoldernya` : 'Seluruh Pustaka Daring';
+    const date = (v) => (v ? formatTanggal(v) : '');
+    const columns = [
+      { label: 'No.', width: 5 },
+      { label: 'Kode pustaka', width: 10 },
+      { label: 'Kode MK', width: 12 },
+      { label: 'Mata kuliah', width: 36 },
+      { label: 'SKS', width: 6 },
+      { label: 'Semester', width: 10 },
+      { label: 'Tahun akademik', width: 12 },
+      { label: 'Program studi', width: 22 },
+      { label: 'Dosen pengelola', width: 34 },
+      { label: 'Folder', width: 22 },
+      { label: 'Tanggal penyusunan', width: 16 },
+      { label: `Jatuh tempo tinjauan (${review.years} tahun)`, width: 18 },
+      { label: 'Status tinjauan', width: 15 },
+      { label: 'Pemilik', width: 22 },
+      { label: 'Terakhir diubah', width: 19 },
+      { label: 'Diubah oleh', width: 22 },
+      { label: 'Hak akses', width: 24 }
+    ];
+    const rows = list.map((s, i) => [
+      i + 1,
+      s.code ?? '',
+      s.info?.kode ?? '',
+      s.title || 'RPS tanpa judul',
+      s.info?.sks || '',
+      s.info?.semester ?? '',
+      s.info?.tahunAkademik ?? '',
+      s.info?.prodi ?? '',
+      (s.info?.dosen ?? []).join('; '),
+      folderOf(s) ? pathText(folderOf(s)) : 'Utama',
+      date(s.since),
+      date(reviewDue(s.since)),
+      !s.since ? 'Tanggal belum diisi' : isDue(s) ? 'Perlu ditinjau' : 'Berlaku',
+      s.createdByName ?? '',
+      when(s.updatedAt),
+      s.updatedByName ?? '',
+      accessTags(s).join(', ')
+    ]);
+    const blob = registerXlsx({
+      title: 'Daftar Induk RPS',
+      note: `${scope} · ${list.length} RPS · diunduh ${when(Date.now())} oleh ${faculty.user.name}`,
+      columns,
+      rows,
+      author: faculty.user.name
+    });
+    downloadBlob(blob, `Daftar-Induk-RPS-${todayIso()}.xlsx`);
+    onnotify(`Daftar induk ${list.length} RPS diunduh`);
+  }
+
+  /** Isi dialog Detail. Diambil dari `live` agar ikut terbarui (mis. setelah kodenya diubah). */
+  const info = $derived.by(() => {
+    const s = infoOf && live.find((x) => x.id === infoOf);
+    if (!s) return null;
+    const who = (uid, name) => (uid === faculty.user.uid ? `Anda (${name})` : name);
+    const editors = namesEditing(s);
+    const i = s.info ?? {};
+    return {
+      name: titleOf(s),
+      rows: [
+        ['Nama RPS', s.title || '—'],
+        ['Kode pustaka', s.code || '—', 'Hanya tampil di pustaka, tidak di dokumen RPS'],
+        ['Mata kuliah', [i.kode, i.sks ? `${i.sks} SKS` : '', i.semester, i.tahunAkademik].filter(Boolean).join(' · ') || '—'],
+        ...(i.prodi ? [['Program studi', i.prodi]] : []),
+        ...(i.dosen?.length ? [['Dosen pengelola', i.dosen.join('; ')]] : []),
+        ['Lokasi', folderOf(s) ? pathText(folderOf(s)) : 'Utama'],
+        ['Hak akses', accessTags(s).join(', ') + (s.custom && folderOf(s) ? ' (khusus)' : '')],
+        ['Hak Anda', canManage(s) ? 'Mengelola' : canEdit(s) ? 'Edit' : 'Hanya lihat'],
+        ['Dibuat oleh', who(s.createdBy, s.createdByName), s.createdByEmail],
+        ['Dibuat', s.createdAt ? when(s.createdAt) : '—'],
+        ['Terakhir diubah', `${when(s.updatedAt)} (${ago(s.updatedAt)}) oleh ${who(s.updatedBy, s.updatedByName)}`],
+        ['Revisi', String(s.rev)],
+        ...(s.since ? [['Disusun', formatTanggal(s.since), 'Tanggal penyusunan di identitas RPS']] : []),
+        ['Ukuran', `Isi ${size(s.size)}, termasuk riwayat ${size(s.totalBytes)}`],
+        ...(openCount(s) ? [['Komentar terbuka', String(openCount(s))]] : []),
+        ...(editors ? [['Sedang diedit', editors]] : [])
+      ]
+    };
+  });
   const namesEditing = (s) => (faculty.editing[s.id] ?? []).map((m) => m.name).join(', ');
 </script>
 
@@ -1291,15 +1377,10 @@
 
   <header>
     {@render tabs()}
-    {#if faculty.status === 'in' && view !== 'admin'}
+    {#if faculty.status === 'in'}
       <input class="search" type="search" bind:this={search} bind:value={query} onkeydown={(e) => e.key === 'ArrowDown' && rows.length && (e.preventDefault(), focusRow(rows[0].key))} placeholder="Cari mata kuliah, kode, pembuat, dosen, CPL/CPMK, atau materi…" />
     {:else}
       <span class="grow"></span>
-    {/if}
-    {#if admin}
-      <button type="button" class="adm" class:on={view === 'admin'} aria-pressed={view === 'admin'} data-tip={view === 'admin' ? 'Kembali ke daftar RPS' : 'Anggota, grup, dan penyimpanan'} onclick={() => (view = view === 'admin' ? 'sops' : 'admin')}>
-        <Icon name="settings" size={15} /><span>Admin</span>
-      </button>
     {/if}
     {#if faculty.user}
       <small class="who" title={faculty.user.email}>{faculty.user.name}{admin ? ' · Admin' : ''}</small>
@@ -1381,17 +1462,19 @@
                 <button type="button" class="link" onclick={() => (only = '')}>Tampilkan semua</button>
               </span>
             {:else if searching}
-              <span class="muted grow">Hasil pencarian di semua folder</span>
+              <span class="muted grow">{words.length ? 'Hasil pencarian' : 'Hasil filter'} di semua folder · {shownLive.length} RPS</span>
             {:else}
               <nav class="grow" aria-label="Lokasi folder">
                 <button class="crumb" class:drop={dropAt === null} aria-current={here ? undefined : 'location'} onclick={() => select(null)} {...dropzone(null)} oncontextmenu={(e) => openMenu(e, hereItems(null))}>Utama</button>
                 {#each crumbs as c (c.id)}
-                  <span class="sep" aria-hidden="true">/</span>
+                  <span class="crumb-sep" aria-hidden="true">/</span>
                   <button class="crumb" class:drop={dropAt === c.id} aria-current={c.id === here ? 'location' : undefined} onclick={() => select(c.id)} {...dropzone(c.id)} oncontextmenu={(e) => openMenu(e, folderMenu(c))}>{c.name}</button>
                 {/each}
               </nav>
             {/if}
+            {@render ib('filter', filtering ? 'Filter (aktif)' : 'Filter', () => (filterOpen = !filterOpen), { on: filterOpen || filtering, expanded: filterOpen || filtering })}
             <SortSelect />
+            {@render ib('table', searching ? 'Unduh daftar induk RPS (XLSX) dari hasil yang tampil' : here ? 'Unduh daftar induk RPS (XLSX) folder ini beserta subfoldernya' : 'Unduh daftar induk RPS (XLSX) seluruh pustaka', exportRegister)}
             {#if here && !searching}
               {@render ib('users', accessTip(byId.get(here)), () => openAccess('folders', byId.get(here)))}
             {/if}
@@ -1407,6 +1490,42 @@
               <div class="meter"><span style:width="{(importing.done / importing.total) * 100}%"></span></div>
             </div>
           {/if}
+          {#if filterOpen || filtering}
+            <div class="filters" role="group" aria-label="Filter RPS">
+              <label>
+                <span>Pemilik</span>
+                <select bind:value={filt.owner}>
+                  <option value="">Semua</option>
+                  {#each owners as [email, name] (email)}<option value={email}>{email === faculty.user.email ? `${name} (Anda)` : name}</option>{/each}
+                </select>
+              </label>
+              <label>
+                <span>Hak akses</span>
+                <select bind:value={filt.access}>
+                  <option value="">Semua</option>
+                  <option value={F.EVERYONE}>Semua anggota</option>
+                  {#each [...groups].sort((a, b) => a.name.localeCompare(b.name, 'id')) as g (g.id)}<option value={g.id}>Grup {g.name}</option>{/each}
+                  <option value="private">Private</option>
+                </select>
+              </label>
+              <label>
+                <span>Diubah</span>
+                <select bind:value={filt.changed}>
+                  <option value="">Kapan saja</option>
+                  {#each CHANGED as [v, label] (v)}<option value={v}>{label}</option>{/each}
+                </select>
+              </label>
+              <label>
+                <span>Kode pustaka</span>
+                <select bind:value={filt.code}>
+                  <option value="">Semua</option>
+                  <option value="with">Sudah ada kode</option>
+                  <option value="without">Belum ada kode</option>
+                </select>
+              </label>
+              {#if filtering}<button type="button" class="link" onclick={resetFilters}>Hapus filter</button>{/if}
+            </div>
+          {/if}
           {#if !drag && dropAt !== undefined}
             <p class="filehint" aria-hidden="true">Lepaskan berkas .rps atau .zip untuk mengunggah ke {dropAt ? byId.get(dropAt)?.name : 'Utama'}</p>
           {/if}
@@ -1419,7 +1538,7 @@
               <li data-key={row.key} class:sel={selected.has(row.key)} class:drop={dropAt === f.id} class:dragging={dragged(f.id)} draggable={canManage(f)} ondragstart={(e) => dragStart(e, f, true)} ondragend={dragEnd} {...dropzone(f.id)} oncontextmenu={(e) => rowMenu(e, row)}>
                 {@render pick(row)}
                 <button class="main" onclick={(e) => rowClick(e, row, () => enterFolder(f.id))} onfocus={() => (cursor = row.key)}>
-                  <strong><Icon name="folder" size={18} /> {f.name} <em class:shared={F.isShared(f)}>{accessLabel(f)}</em></strong>
+                  <strong><Icon name="folder" size={18} /> {f.name} {#each accessTags(f) as t}<em class:shared={F.isShared(f)}>{t}</em>{/each}</strong>
                   <small>{[searching && parent && `di ${pathText(parent)}`, folderInfo(f), `dibuat ${f.createdBy === faculty.user.uid ? 'Anda' : f.createdByName}`].filter(Boolean).join(' · ')}</small>
                 </button>
                 <span class="acts" role="group" aria-label="Tindakan folder">
@@ -1437,15 +1556,15 @@
                   <strong>
                     <Icon name="file" size={15} />
                     {titleOf(s)}
-                    <em class:shared={F.isShared(s)}>{accessLabel(s)}</em>
+                    {#each accessTags(s) as t}<em class:shared={F.isShared(s)}>{t}</em>{/each}
                     {#if s.custom && folderOf(s)}<em>Khusus</em>{/if}
                     {#if !canEdit(s)}<em>Hanya lihat</em>{/if}
                     {#if isOpen(s)}<em>Terbuka di tab</em>{/if}
                     {#if isDue(s)}<em class="due" title={`Disusun ${formatTanggal(s.since)}, lebih dari ${review.years} tahun lalu`}>Perlu ditinjau</em>{/if}
                     {#if openCount(s)}<em class="notes" title="Komentar yang belum ditandai selesai">{openCount(s)} komentar</em>{/if}
                   </strong>
-                  <small title={s.createdByEmail}>
-                    {[searching && folderOf(s) && `di ${pathText(folderOf(s))}`, only === 'due' && `disusun ${formatTanggal(s.since)}`, s.nomor, `dibuat ${s.createdBy === faculty.user.uid ? 'Anda' : s.createdByName}`, `diubah ${s.updatedByName}, ${when(s.updatedAt)}`].filter(Boolean).join(' · ')}
+                  <small title={`Terakhir diubah ${when(s.updatedAt)} oleh ${s.updatedByName}`}>
+                    {[searching && folderOf(s) && `di ${pathText(folderOf(s))}`, only === 'due' && `disusun ${formatTanggal(s.since)}`, `diubah ${ago(s.updatedAt)}`].filter(Boolean).join(' · ')}
                   </small>
                   {#if editors}<small class="editing">🔒 Terkunci, sedang diedit oleh {editors}</small>{/if}
                 </button>
@@ -1532,7 +1651,7 @@
                 <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
                 <div class="main static" tabindex="0" onclick={(e) => rowClick(e, row, () => {})} onfocus={() => (cursor = row.key)}>
                   <strong><Icon name="file" size={15} /> {titleOf(s)}</strong>
-                  <small>{[s.nomor, `dibuat ${s.createdBy === faculty.user.uid ? 'Anda' : s.createdByName}`, `dihapus ${when(s.deletedAt)}`, size(s.totalBytes)].filter(Boolean).join(' · ')}</small>
+                  <small title={`Dihapus ${when(s.deletedAt)}`}>{[`dihapus ${ago(s.deletedAt)}`, size(s.totalBytes)].join(' · ')}</small>
                 </div>
                 <span class="acts" role="group" aria-label="Tindakan RPS">
                   {@render ib('restore', 'Pulihkan', () => restoreFromBin(s))}
@@ -1543,101 +1662,6 @@
               <li class="empty">{busy ? 'Memuat…' : query.trim() ? 'Tidak ada yang cocok.' : 'Recycle bin kosong.'}</li>
             {/each}
           </ul>
-        {:else if admin}
-      <div class="admin">
-        <section>
-          <h3>Penyimpanan</h3>
-          {#if usage}
-            <p class="usage"><strong>{size(usage.bytes)}</strong> dari {size(usage.limit)} terpakai · sisa {size(Math.max(0, usage.limit - usage.bytes))}</p>
-            <div class="meter" role="progressbar" aria-valuenow={Math.round(percent)} aria-valuemin="0" aria-valuemax="100"><span style:width="{percent}%"></span></div>
-            <small>
-              Perkiraan dari ukuran isi RPS, riwayat, dan Recycle bin. Ruang sebenarnya lebih besar karena indeks Firestore.
-              Kuota baca dan tulis harian hanya terlihat di Firebase Console.
-            </small>
-            <div class="row">
-              {@render ib('gauge', 'Ubah batas penyimpanan', changeLimit)}
-              {@render ib('refresh', 'Hitung ulang pemakaian', recount)}
-            </div>
-          {:else}
-            <small>Memuat…</small>
-          {/if}
-        </section>
-        <section>
-          <h3>Anggota <span class="muted">{members.length}</span></h3>
-          <form onsubmit={addMember} class="row add-members">
-            <textarea
-              bind:value={newEmail}
-              rows={newEmail.includes('\n') || emailCount > 1 ? 4 : 1}
-              placeholder="nama@ub.ac.id atau nama@gmail.com; beberapa email dipisah koma, spasi, atau baris"
-              aria-label="Email anggota baru"
-              onkeydown={(e) => {
-                // Enter menambahkan; Shift+Enter untuk baris baru (menempel daftar email tetap bisa).
-                if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) {
-                  e.preventDefault();
-                  addMember();
-                }
-              }}
-            ></textarea>
-            <select bind:value={newRole} aria-label="Peran">
-              <option value="member">Anggota</option>
-              <option value="admin">Admin</option>
-            </select>
-            {#if groups.length}
-              <select bind:value={newGroup} aria-label="Grup anggota baru">
-                <option value="">Tanpa grup</option>
-                {#each groups as g (g.id)}<option value={g.id}>{g.name}</option>{/each}
-              </select>
-            {/if}
-            <button class="ib" aria-label="Tambah anggota" data-tip={emailCount > 1 ? `Tambah ${emailCount} anggota` : 'Tambah anggota'} disabled={!newEmail.trim()}><Icon name="plus" /></button>
-          </form>
-          {#if emailCount > 1}<small class="muted">{emailCount} email akan ditambahkan.</small>{/if}
-          <ul class="members">
-            {#each members as m (m.email)}
-              {@const self = m.email === faculty.user.email}
-              {@const gn = groupNames(m)}
-              <li>
-                <span>{m.email}{self ? ' (Anda)' : ''}{#if gn.length}<small class="groups-of">{gn.join(', ')}</small>{/if}</span>
-                <select value={m.role} disabled={self} aria-label={`Peran ${m.email}`} onchange={(e) => adminAct(() => F.setMember(m.email, e.currentTarget.value, m.groups))}>
-                  <option value="member">Anggota</option>
-                  <option value="admin">Admin</option>
-                </select>
-                {@render ib('trash', self ? 'Anda tidak bisa mencabut akses sendiri' : 'Cabut akses', () => removeMember(m), { danger: true, disabled: self })}
-              </li>
-            {/each}
-          </ul>
-        </section>
-        <section>
-          <h3>Grup <span class="muted">{groups.length}</span></h3>
-          <small>Grup bisa dipilih di Hak akses seperti email, sehingga semua anggotanya mendapat hak yang sama sekaligus. Anggota yang ditambahkan ke grup langsung mendapat hak grup itu.</small>
-          <form onsubmit={addGroup} class="row">
-            <input bind:value={groupName} maxlength="80" placeholder="Nama grup baru, mis. Prodi Informatika" aria-label="Nama grup baru" />
-            <button class="ib" aria-label="Buat grup" data-tip="Buat grup" disabled={!groupName.trim()}><Icon name="plus" /></button>
-          </form>
-          {#if groups.length}
-            <ul class="members">
-              {#each groups as g (g.id)}
-                {@const shown = openGroup === g.id}
-                {@const count = inGroup(g).length}
-                <li class="group">
-                  <div class="group-head">
-                    <span>{g.name} <small class="groups-of">{count} anggota</small></span>
-                    {@render ib('users', shown ? 'Tutup daftar anggota' : 'Atur anggota grup', () => (openGroup = shown ? null : g.id), { on: shown, expanded: shown })}
-                    {@render ib('pencil', 'Ubah nama grup', () => renameGroup(g))}
-                    {@render ib('trash', 'Hapus grup', () => deleteGroup(g), { danger: true })}
-                  </div>
-                  {#if shown}
-                    <div class="group-members">
-                      {#each members as m (m.email)}
-                        <label><input type="checkbox" checked={m.groups.includes(g.id)} onchange={(e) => toggleInGroup(g, m, e.currentTarget.checked)} /> {m.email}</label>
-                      {/each}
-                    </div>
-                  {/if}
-                </li>
-              {/each}
-            </ul>
-          {/if}
-        </section>
-      </div>
         {/if}
       </section>
     </div>
@@ -1645,16 +1669,16 @@
     <div class="gate">
       {#if faculty.status === 'out'}
         <p>Pustaka Daring menyimpan RPS bersama secara daring. Masuk dengan akun Google <strong>@ub.ac.id</strong> atau <strong>@gmail.com</strong> yang sudah didaftarkan admin.</p>
-        <button class="btn primary" onclick={() => F.signIn().catch((e) => ui.alert(e.message))}>Masuk dengan Google</button>
+        <button class="btn primary" onclick={() => F.signIn().catch((e) => ui.alert(e.message))}><Icon name="login" size={15} />Masuk dengan Google</button>
       {:else if faculty.status === 'domain'}
         <p><strong>{faculty.user.email}</strong> tidak bisa dipakai. Pustaka Daring hanya untuk akun @ub.ac.id atau @gmail.com.</p>
-        <button class="btn" onclick={() => F.signOut().then(() => F.signIn()).catch((e) => ui.alert(e.message))}>Ganti akun</button>
+        <button class="btn" onclick={() => F.signOut().then(() => F.signIn()).catch((e) => ui.alert(e.message))}><Icon name="users" size={15} />Ganti akun</button>
       {:else if faculty.status === 'notMember'}
         <p><strong>{faculty.user.email}</strong> belum terdaftar sebagai anggota. Minta admin Pustaka Daring mendaftarkan akun ini.</p>
-        <button class="btn" onclick={() => F.recheck()}>Periksa lagi</button>
+        <button class="btn" onclick={() => F.recheck()}><Icon name="refresh" size={15} />Periksa lagi</button>
       {:else if faculty.status === 'error'}
         <p class="error">{faculty.error}</p>
-        <button class="btn" onclick={() => (faculty.user ? F.recheck() : F.start())}>Coba lagi</button>
+        <button class="btn" onclick={() => (faculty.user ? F.recheck() : F.start())}><Icon name="refresh" size={15} />Coba lagi</button>
       {:else}
         <p>Memuat…</p>
       {/if}
@@ -1688,12 +1712,13 @@
       {#if moving.entries.some((d) => !d.item.custom)}<small class="muted">Hak aksesnya akan mengikuti folder tujuan.</small>{/if}
       <footer class="end">
         <button type="button" class="btn" onclick={() => (moving = null)}>Batal</button>
-        <button class="btn primary">Pindahkan</button>
+        <button class="btn primary"><Icon name="move" size={15} />Pindahkan</button>
       </footer>
     </form>
   {/if}
 </dialog>
 
+<SopInfoDialog {info} oncode={info && canEdit(live.find((x) => x.id === infoOf)) ? () => changeCode(live.find((x) => x.id === infoOf)) : undefined} onclose={() => (infoOf = null)} />
 <AccessDialog target={accessTarget} onsave={saveAccess} onclose={() => (accessTarget = null)} />
 
 {#if compare}
@@ -1767,10 +1792,6 @@
     font-size: 1.1rem;
     flex: none;
   }
-  h3 {
-    margin: 0 0 0.45rem;
-    font-size: 0.92rem;
-  }
   .grow {
     flex: 1;
     min-width: 0;
@@ -1779,29 +1800,6 @@
     flex: 1;
     min-width: 0;
     margin: 0 0.5rem;
-  }
-  .adm {
-    flex: none;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    height: 1.95rem;
-    padding: 0 0.7rem;
-    border: 1px solid var(--line);
-    border-radius: 7px;
-    background: none;
-    color: var(--text);
-    font: inherit;
-    font-size: 0.82rem;
-    cursor: pointer;
-  }
-  .adm:hover:not(.on) {
-    background: var(--surface-2);
-  }
-  .adm.on {
-    border-color: transparent;
-    background: var(--accent-soft);
-    color: var(--accent);
   }
   .who {
     flex: none;
@@ -2031,7 +2029,39 @@
     color: var(--text);
     font-weight: 600;
   }
-  .sep {
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 0.4rem 0.75rem;
+    padding: 0.5rem 0.6rem;
+    margin-bottom: 0.4rem;
+    border-radius: 8px;
+    background: var(--surface-2);
+    font-size: 0.82rem;
+  }
+  .filters label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    color: var(--muted);
+  }
+  .filters select {
+    min-width: 9rem;
+    max-width: 16rem;
+    width: auto;
+    padding: 0.25rem 0.35rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--surface);
+    color: var(--text);
+    font: inherit;
+  }
+  .filters .link {
+    align-self: center;
+    margin-left: auto;
+  }
+  .crumb-sep {
     color: var(--muted);
   }
   .list {
@@ -2320,30 +2350,6 @@
     cursor: pointer;
     text-decoration: underline;
   }
-  .admin {
-    overflow: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    padding: 0.3rem 0.2rem;
-  }
-  .admin section {
-    flex: none;
-  }
-  .admin select {
-    width: auto;
-    flex: none;
-  }
-  .admin small {
-    display: block;
-    color: var(--muted);
-    font-size: 0.78rem;
-    line-height: 1.45;
-  }
-  .usage {
-    margin: 0 0 0.35rem;
-    font-size: 0.9rem;
-  }
   .meter {
     height: 8px;
     border-radius: 99px;
@@ -2392,82 +2398,5 @@
     flex-basis: 100%;
     text-align: center;
     font-size: 0.8rem;
-  }
-  .row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    margin-top: 0.5rem;
-  }
-  .row input,
-  .add-members textarea {
-    flex: 1;
-    min-width: 12rem;
-  }
-  .add-members {
-    align-items: flex-start;
-  }
-  .add-members textarea {
-    resize: vertical;
-    font: inherit;
-    min-height: 2.1rem;
-    box-sizing: border-box;
-  }
-  .members {
-    list-style: none;
-    margin: 0.5rem 0 0;
-    padding: 0;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-  }
-  .members li {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.35rem 0.6rem;
-    border-bottom: 1px solid var(--line);
-    font-size: 0.85rem;
-  }
-  .members li:last-child {
-    border-bottom: 0;
-  }
-  .members span {
-    flex: 1;
-    min-width: 0;
-    overflow-wrap: anywhere;
-  }
-  .admin .groups-of {
-    display: block;
-    font-size: 0.76rem;
-  }
-  .members li.group {
-    display: block;
-  }
-  .group-head {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-  .group-members {
-    display: flex;
-    flex-direction: column;
-    gap: 0.2rem;
-    max-height: 14rem;
-    overflow: auto;
-    margin: 0.35rem 0 0.15rem;
-    padding: 0.4rem 0.5rem;
-    border-radius: 8px;
-    background: var(--surface-2);
-  }
-  .group-members label {
-    display: flex;
-    align-items: center;
-    gap: 0.45rem;
-    overflow-wrap: anywhere;
-    cursor: pointer;
-  }
-  .group-members input {
-    width: auto;
-    margin: 0;
   }
 </style>

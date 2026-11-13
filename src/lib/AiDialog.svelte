@@ -1,4 +1,5 @@
 <script>
+  import Icon from './Icon.svelte';
   import { aiPrompt, aiImportPrompt, aiRevisePrompt } from './aiPrompt.js';
   import * as ui from './ask.svelte.js';
   import { docTitle } from './model.js';
@@ -74,12 +75,12 @@
 <dialog bind:this={dialog} class="dialog" use:dismiss onclose={() => (open = false)}>
   <header>
     <h2>RPS dengan bantuan AI</h2>
-    <button type="button" class="x" onclick={() => (open = false)} aria-label="Tutup">×</button>
+    <button type="button" class="x" onclick={() => (open = false)} aria-label="Tutup"><Icon name="x" size={14} /></button>
   </header>
   <div class="seg" role="tablist" aria-label="Jenis">
-    <button role="tab" aria-selected={draft.mode === 'new'} class:on={draft.mode === 'new'} onclick={() => (draft.mode = 'new')}>Susun RPS baru</button>
-    <button role="tab" aria-selected={draft.mode === 'import'} class:on={draft.mode === 'import'} onclick={() => (draft.mode = 'import')}>Impor RPS lama</button>
-    <button role="tab" aria-selected={draft.mode === 'revise'} class:on={draft.mode === 'revise'} onclick={() => (draft.mode = 'revise')}>Revisi RPS ini</button>
+    <button role="tab" aria-selected={draft.mode === 'new'} class:on={draft.mode === 'new'} onclick={() => (draft.mode = 'new')}><Icon name="filePlus" size={15} />Susun RPS baru</button>
+    <button role="tab" aria-selected={draft.mode === 'import'} class:on={draft.mode === 'import'} onclick={() => (draft.mode = 'import')}><Icon name="upload" size={15} />Impor RPS lama</button>
+    <button role="tab" aria-selected={draft.mode === 'revise'} class:on={draft.mode === 'revise'} onclick={() => (draft.mode = 'revise')}><Icon name="pencil" size={15} />Revisi RPS ini</button>
   </div>
   {#if draft.mode === 'new'}
     <p>Minta asisten AI menyusun RPS dari deskripsi mata kuliah, lalu buka hasilnya di sini untuk diperiksa, dirapikan, dan diekspor.</p>
@@ -142,7 +143,7 @@
       <textarea rows="5" class="mono" aria-label="Jawaban AI" bind:value={draft.answer} placeholder={'{ "format": "rps-editor", … }'}></textarea>
     </label>
     {#if navigator.clipboard?.readText}
-      <button type="button" class="btn paste" onclick={pasteAnswer}>Tempel</button>
+      <button type="button" class="btn paste" onclick={pasteAnswer}><Icon name="paste" size={15} />Tempel</button>
     {/if}
     {#if draft.mode === 'revise'}
       <small class="hint">
@@ -227,6 +228,10 @@
   }
   .seg button {
     flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
     padding: 0.45rem 0.6rem;
     border: 0;
     background: var(--surface);
@@ -280,7 +285,8 @@
     line-height: 1.5;
   }
   .paste {
-    display: block;
+    display: flex;
+    width: fit-content;
     margin-bottom: 0.5rem;
   }
   .actions {

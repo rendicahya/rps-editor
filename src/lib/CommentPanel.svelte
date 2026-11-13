@@ -255,7 +255,7 @@
       <MentionInput bind:value={editText} {people} rows="3" maxlength={COMMENT_MAX} onkeydown={(e) => keys(e, () => saveEdit(c), () => (editing = null))} />
       <span class="row end">
         <button class="btn small ghost" onclick={() => (editing = null)}>Batal</button>
-        <button class="btn small primary" disabled={busy || !editText.trim()} onclick={() => saveEdit(c)}>Simpan</button>
+        <button class="btn small primary" disabled={busy || !editText.trim()} onclick={() => saveEdit(c)}><Icon name="save" size={13} />Simpan</button>
       </span>
     </div>
   {:else}
@@ -280,7 +280,7 @@
   <div class="notes" role="dialog" aria-label="Komentar">
     <div class="head">
       <strong>Komentar</strong>
-      <button class="icon" onclick={() => (open = false)} title="Tutup (Esc)">✕</button>
+      <button class="icon" onclick={() => (open = false)} title="Tutup (Esc)" aria-label="Tutup"><Icon name="x" size={14} /></button>
     </div>
 
     {#if !remote}
@@ -289,7 +289,7 @@
           Komentar disimpan di Pustaka Daring supaya bisa dibaca, dibalas, dan ditandai selesai oleh siapa pun yang punya
           akses ke RPS ini. Simpan RPS ini ke Pustaka Daring dulu, lalu bagikan kepada peninjau.
         </p>
-        <button class="btn small primary" onclick={onupload}>Simpan ke Pustaka Daring</button>
+        <button class="btn small primary" onclick={onupload}><Icon name="cloud" size={14} />Simpan ke Pustaka Daring</button>
       </div>
     {:else if faculty.status !== 'in'}
       <p class="intro">Pustaka Daring sedang tidak bisa dihubungi, jadi komentar belum bisa dimuat.</p>
@@ -299,7 +299,7 @@
           <span>Pada</span>
           {#if anchor && target.label !== 'Seluruh RPS'}
             <button class="chip" onclick={() => onjump(anchor)} title="Tampilkan di halaman">{target.label}</button>
-            <button class="icon tiny" title="Komentari Seluruh RPS" aria-label="Komentari Seluruh RPS" onclick={() => ((anchor = null), (pinned = true))}>✕</button>
+            <button class="icon tiny" title="Komentari seluruh RPS" aria-label="Komentari seluruh RPS" onclick={() => ((anchor = null), (pinned = true))}><Icon name="x" size={11} /></button>
           {:else}
             <span class="chip plain">Seluruh RPS</span>
           {/if}
@@ -315,7 +315,7 @@
         />
         <div class="row">
           <small class="hint">Klik isian di halaman untuk mengomentarinya · Ctrl+Enter mengirim</small>
-          <button class="btn small primary" disabled={busy || !draft.trim()} onclick={send}>Kirim</button>
+          <button class="btn small primary" disabled={busy || !draft.trim()} onclick={send}><Icon name="send" size={13} />Kirim</button>
         </div>
       </div>
 
@@ -344,7 +344,7 @@
               {/if}
               {#if w.changed}<span class="tag" title="Isinya sudah berubah sejak dikomentari">diubah</span>{/if}
               {#if c.resolved}
-                <button class="btn small ghost res" disabled={busy} onclick={() => resolve(c, false)}>Buka lagi</button>
+                <button class="btn small ghost res" disabled={busy} onclick={() => resolve(c, false)}><Icon name="restore" size={13} />Buka lagi</button>
               {:else}
                 <button class="btn small ghost res" disabled={busy || c.pending} onclick={() => resolve(c, true)} title="Tandai selesai"><Icon name="check" size={14} /> Selesai</button>
               {/if}
@@ -366,7 +366,7 @@
                 <MentionInput bind:value={replyText} {people} rows="2" maxlength={COMMENT_MAX} placeholder="Tulis balasan…" onkeydown={(e) => keys(e, () => sendReply(c), () => (replyTo = null))} />
                 <span class="row end">
                   <button class="btn small ghost" onclick={() => (replyTo = null)}>Batal</button>
-                  <button class="btn small primary" disabled={busy || !replyText.trim()} onclick={() => sendReply(c)}>Balas</button>
+                  <button class="btn small primary" disabled={busy || !replyText.trim()} onclick={() => sendReply(c)}><Icon name="reply" size={13} />Balas</button>
                 </span>
               </div>
             {:else if !c.pending}

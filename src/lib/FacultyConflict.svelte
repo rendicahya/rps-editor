@@ -1,4 +1,5 @@
 <script>
+  import Icon from './Icon.svelte';
   // Pilihan saat penyimpanan ke Pustaka Daring bertabrakan. info: { canOverwrite, by, at, message } atau null.
   let { info, onchoice } = $props();
   let dialog;
@@ -24,8 +25,8 @@
     {/if}
     <footer>
       <button class="btn" onclick={() => onchoice('cancel')}>Batal</button>
-      <button class="btn" class:primary={!info.canOverwrite} onclick={() => onchoice('copy')}>Simpan sebagai salinan</button>
-      {#if info.canOverwrite}<button class="btn primary" onclick={() => onchoice('overwrite')}>Timpa dengan versi saya</button>{/if}
+      <button class="btn" class:primary={!info.canOverwrite} onclick={() => onchoice('copy')}><Icon name="copy" size={15} />Simpan sebagai salinan</button>
+      {#if info.canOverwrite}<button class="btn primary" onclick={() => onchoice('overwrite')}><Icon name="save" size={15} />Timpa dengan versi saya</button>{/if}
     </footer>
   {/if}
 </dialog>

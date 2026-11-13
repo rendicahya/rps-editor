@@ -1,4 +1,5 @@
 <script>
+  import Icon from './Icon.svelte';
   // Pilihan saat menutup tab yang belum tersimpan. info: { title, where, isNew } atau null.
   // where: nama pustaka tujuan; isNew: RPS belum ada di pustaka itu.
   // onchoice menerima 'save', 'discard', atau 'cancel'.
@@ -21,9 +22,9 @@
     {/if}
     <footer>
       <button class="btn" onclick={() => onchoice('cancel')}>Tidak jadi menutup</button>
-      <button class="btn" onclick={() => onchoice('discard')}>Tutup tanpa menyimpan</button>
+      <button class="btn" onclick={() => onchoice('discard')}><Icon name="trash" size={15} />Tutup tanpa menyimpan</button>
       <!-- svelte-ignore a11y_autofocus -->
-      <button class="btn primary" autofocus onclick={() => onchoice('save')}>Simpan dan tutup</button>
+      <button class="btn primary" autofocus onclick={() => onchoice('save')}><Icon name="save" size={15} />Simpan dan tutup</button>
     </footer>
   {/if}
 </dialog>

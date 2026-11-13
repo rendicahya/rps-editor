@@ -194,7 +194,7 @@
       </label>
       {#if chosen.length}
         <span>{chosen.length} dipilih</span>
-        <button class="btn small danger" onclick={removePicked}>Hapus terpilih</button>
+        <button class="btn small danger" onclick={removePicked}><Icon name="trash" size={14} />Hapus terpilih</button>
         <button class="link" onclick={() => (picked = [])}>Batal</button>
       {/if}
       <span class="grow"></span>
@@ -235,7 +235,7 @@
             onclick={() => ((tagEdit = tagEdit === e.id ? null : e.id), (newTag = ''))}
             title="Atur label untuk mengelompokkan">Label</button
           >
-          <button class="btn small" onclick={() => duplicate(e)} title="Buat salinan di pustaka">Duplikat</button>
+          <button class="btn small" onclick={() => duplicate(e)} title="Buat salinan di pustaka"><Icon name="copy" size={14} />Duplikat</button>
           <button
             class="btn small danger"
             onclick={() => remove(e)}
@@ -259,7 +259,7 @@
             >
               <!-- svelte-ignore a11y_autofocus -->
               <input bind:value={newTag} placeholder={allTags.length ? 'Label baru…' : 'Label baru, mis. Akademik'} aria-label="Label baru" autofocus />
-              <button class="btn small" disabled={!newTag.trim()}>Tambah</button>
+              <button class="btn small" disabled={!newTag.trim()}><Icon name="plus" size={14} />Tambah</button>
             </form>
           </div>
         {/if}
@@ -272,7 +272,7 @@
   </ul>
 
   <footer>
-    <button class="btn" onclick={saveCurrent} disabled={!cansave}>Simpan dokumen ini ke pustaka</button>
+    <button class="btn" onclick={saveCurrent} disabled={!cansave}><Icon name="save" size={15} />Simpan dokumen ini ke pustaka</button>
   </footer>
 
 <style>

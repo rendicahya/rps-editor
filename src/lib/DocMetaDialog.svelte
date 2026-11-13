@@ -1,4 +1,5 @@
 <script>
+  import Icon from './Icon.svelte';
   import { tick } from 'svelte';
   import { META_FIELDS, defaultMeta } from './model.js';
 
@@ -61,7 +62,7 @@
           onclick={() => (values = Object.fromEntries(META_FIELDS.map(({ key }) => [key, ''])))}
         >Pakai bawaan</button>
         <button type="button" class="btn" onclick={() => (open = false)}>Batal</button>
-        <button class="btn primary">Simpan</button>
+        <button class="btn primary"><Icon name="save" size={15} />Simpan</button>
       </footer>
     </form>
   {/if}

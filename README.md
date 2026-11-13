@@ -53,15 +53,32 @@ Sudah ada:
 - **Pengingat tinjauan berkala**: RPS yang tanggal penyusunannya lebih dari 1–5 tahun lalu (dipilih di panel Periksa,
   bawaan 2 tahun; diingat per browser) diberi peringatan "sebaiknya ditinjau ulang". Di Pustaka Daring, RPS itu
   berlencana **Perlu ditinjau** dan bisa didaftar sekaligus lewat **Perlu ditinjau** di bawah pohon folder.
-- **Tambah anggota sekaligus** (tab Admin di Pustaka Daring): tempel banyak email, dipisah koma, spasi, titik koma,
-  atau baris baru (format "Nama &lt;email&gt;" juga diterima). Email yang sudah terdaftar tidak diubah perannya, hanya
-  dimasukkan ke grup yang dipilih; alamat yang tidak sah dilewati setelah konfirmasi.
+- **Admin** (tombol di toolbar, hanya tampil untuk admin): dialog dengan halaman **Anggota**, **Grup**, dan
+  **Penyimpanan**.
+  - Tambah anggota sekaligus: tempel banyak email, dipisah koma, spasi, titik koma, atau baris baru (format
+    "Nama &lt;email&gt;" juga diterima). Email yang sudah terdaftar tidak diubah perannya, hanya dimasukkan ke grup yang
+    dipilih; alamat yang tidak sah dilewati setelah konfirmasi.
+  - Grup bisa dibuat, diganti nama, diisi anggotanya, dan **diduplikat** (grup baru dengan anggota yang sama; hak akses
+    RPS grup asal tidak ikut disalin).
 
 - **Pustaka Daring**: folder, hak akses per anggota/grup (plus pilihan akses umum: Private, semua anggota bisa
   melihat, atau semua anggota bisa mengedit), riwayat, recycle bin, dan kunci edit.
   - Pilih banyak item dengan Ctrl/Shift+klik, lalu pindahkan (seret, potong-tempel, atau keyboard) atau hapus
     sekaligus. Pemindahan dan pemindahan ke Recycle bin bisa diurungkan dari pesan yang muncul (atau Ctrl+Z).
-  - Daftar Lokal dan Daring bisa diurutkan menurut nama atau waktu terakhir diubah.
+  - Daftar Lokal dan Daring bisa diurutkan menurut nama atau waktu terakhir diubah. Daftar Daring menampilkan kapan
+    terakhir diubah ("3 jam yang lalu").
+  - **Kode pustaka**: klik kanan RPS › **Ubah kode pustaka…** untuk memberi awalan seperti `A.1` atau `Smt-3`. Kode hanya
+    tampil di pustaka dan ikut diurutkan serta dicari, tetapi tidak masuk ke isi RPS dan tidak membuat versi baru (hak edit
+    diperlukan). Klik kanan › **Detail** menampilkan nama, kode, mata kuliah, prodi, dosen pengelola, lokasi, hak akses,
+    pembuat, penyunting terakhir, revisi, dan ukuran.
+  - **Filter** (tombol corong di atas daftar): menyaring RPS di semua folder menurut pemilik, hak akses (semua anggota,
+    grup tertentu, atau private), waktu terakhir diubah, dan ada/tidaknya kode pustaka. Bisa digabung dengan pencarian,
+    Perlu ditinjau, dan Ada komentar.
+  - **Daftar induk RPS** (tombol tabel di atas daftar): XLSX berisi kode pustaka, kode MK, mata kuliah, SKS, semester,
+    tahun akademik, prodi, dosen pengelola, folder, tanggal penyusunan, jatuh tempo dan status tinjauan, pemilik,
+    perubahan terakhir, dan hak akses. Isinya hasil yang tampil saat mencari atau menyaring; selain itu folder yang dibuka
+    beserta subfoldernya (di Utama: seluruh pustaka yang bisa Anda lihat). Baris judul kolom dibekukan, berfilter, dan
+    diulang di tiap halaman cetak (A4 mendatar).
   - **Duplikat** menghasilkan RPS milik penyalinnya dengan hak akses yang sama seperti aslinya: semua yang bisa
     melihat atau mengedit aslinya mendapat hak yang sama pada salinan (ditandai **Khusus** bila berbeda dari folder
     tempatnya).

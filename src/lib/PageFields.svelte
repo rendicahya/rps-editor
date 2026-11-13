@@ -16,6 +16,7 @@
   import { plainText, sliceRich, getSelection, setSelection } from './richtext.js';
   import RichField from './RichField.svelte';
   import ContextMenu from './ContextMenu.svelte';
+  import Icon from './Icon.svelte';
 
   // Lapisan isian di atas halaman: teks diketik langsung pada posisinya di dokumen. Teks isian transparan
   // sehingga yang terlihat tetap hasil render SVG (sama dengan PDF); hanya kursor dan seleksi dari isian.
@@ -529,14 +530,14 @@
             {#if f.count > 1}
               <button tabindex="-1" class="grip" title="Seret untuk memindahkan (Esc membatalkan)" aria-label="Seret untuk memindahkan" onpointerdown={(e) => startDrag(e, r)}>⠿</button>
             {/if}
-            <button tabindex="-1" title="Naikkan" aria-label="Naikkan" aria-disabled={r.index === 0} onclick={() => move(r.list, r.index, -1)}>{f.top ? '◀' : '▲'}</button>
-            <button tabindex="-1" title="Turunkan" aria-label="Turunkan" aria-disabled={r.index === f.count - 1} onclick={() => move(r.list, r.index, 1)}>{f.top ? '▶' : '▼'}</button>
-            <button tabindex="-1" title="Duplikat" aria-label="Duplikat" onclick={() => duplicate(r.list, r.index)}>⧉</button>
-            <button tabindex="-1" title="Tambah {LISTS[r.list]} di bawah" aria-label="Tambah" onclick={() => addAfter(r.list, r.index)}>＋</button>
+            <button tabindex="-1" title="Naikkan" aria-label="Naikkan" aria-disabled={r.index === 0} onclick={() => move(r.list, r.index, -1)}><Icon name={f.top ? 'arrowLeft' : 'arrowUp'} size={12} /></button>
+            <button tabindex="-1" title="Turunkan" aria-label="Turunkan" aria-disabled={r.index === f.count - 1} onclick={() => move(r.list, r.index, 1)}><Icon name={f.top ? 'arrowRight' : 'arrowDown'} size={12} /></button>
+            <button tabindex="-1" title="Duplikat" aria-label="Duplikat" onclick={() => duplicate(r.list, r.index)}><Icon name="copy" size={12} /></button>
+            <button tabindex="-1" class="add" title="Tambah {LISTS[r.list]} {f.top ? 'di kanan' : 'di bawah'}" aria-label="Tambah" onclick={() => addAfter(r.list, r.index)}><Icon name="plus" size={14} /></button>
             {#if r.list === 'pertemuan'}
               <button tabindex="-1" title={r.item.jenis === 'kuliah' ? 'Jadikan praktikum' : 'Jadikan kuliah'} aria-label="Ganti jenis pertemuan" onclick={() => toggleJenis(r.item)}>{r.item.jenis === 'kuliah' ? 'P' : 'K'}</button>
             {/if}
-            <button tabindex="-1" class="danger" title="Hapus {LISTS[r.list]}" aria-label="Hapus" onclick={() => remove(r.list, r.id)}>✕</button>
+            <button tabindex="-1" class="danger" title="Hapus {LISTS[r.list]}" aria-label="Hapus" onclick={() => remove(r.list, r.id)}><Icon name="x" size={12} /></button>
           </span>
         {/if}
       </div>
@@ -829,6 +830,16 @@
   .g-tools button:hover {
     background: rgb(var(--edit));
     color: #fff;
+  }
+  /* Tombol tambah diisi warna agar menonjol di antara tombol lain yang hanya bergaris. */
+  .g-tools button.add {
+    width: 22px;
+    background: rgb(var(--edit));
+    border-color: rgb(var(--edit));
+    color: #fff;
+  }
+  .g-tools button.add:hover {
+    filter: brightness(1.12);
   }
   .g-tools button.danger {
     border-color: rgb(192 57 43 / 0.5);

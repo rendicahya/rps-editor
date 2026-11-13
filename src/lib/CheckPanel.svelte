@@ -1,4 +1,5 @@
 <script>
+  import Icon from './Icon.svelte';
   import { review, setReviewYears, REVIEW_CHOICES } from './review.svelte.js';
   import { contributions } from './rekap.js';
   import { formatAngka } from './model.js';
@@ -36,7 +37,7 @@
   <div class="check" role="dialog" aria-label="Periksa dokumen" bind:this={panel}>
     <div class="head">
       <strong>Periksa dokumen</strong>
-      <button class="icon" onclick={() => (open = false)} title="Tutup (Esc)">✕</button>
+      <button class="icon" onclick={() => (open = false)} title="Tutup (Esc)" aria-label="Tutup"><Icon name="x" size={14} /></button>
     </div>
     <div class="tabs" role="tablist">
       <button role="tab" aria-selected={tab === 'issues'} class:on={tab === 'issues'} onclick={() => (tab = 'issues')}>Temuan ({count('error') + count('warn')})</button>
