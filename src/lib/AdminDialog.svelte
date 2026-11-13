@@ -5,16 +5,18 @@
   import Icon from './Icon.svelte';
   import * as ui from './ask.svelte.js';
   import { dismiss } from './dismiss.js';
+  import { DEFAULTS, DEFAULT_FIELDS, defaultsMeta, applyDefaults } from './appDefaults.svelte.js';
 
-  /** Pengaturan khusus admin: anggota, grup, dan penyimpanan. Anggota dan grup dipakai bersama aplikasi lain di proyek Firebase yang sama. onnotify(pesan): toast di App. */
+  /** Pengaturan khusus admin: bawaan RPS baru, anggota, grup, dan penyimpanan. Anggota dan grup dipakai bersama aplikasi lain di proyek Firebase yang sama. onnotify(pesan): toast di App. */
   let { open = $bindable(false), onnotify } = $props();
 
   const PAGES = [
+    ['defaults', 'Bawaan RPS baru', 'filePlus', 'Nama universitas dan fakultas untuk RPS baru'],
     ['members', 'Anggota', 'user', 'Daftarkan anggota dan atur perannya'],
     ['groups', 'Grup', 'users', 'Kelompok anggota untuk memberi hak akses sekaligus'],
     ['storage', 'Penyimpanan', 'gauge', 'Pemakaian dan batas penyimpanan']
   ];
-  let view = $state('members');
+  let view = $state(DEFAULTS.universitas || DEFAULTS.fakultas ? 'members' : 'defaults');
   let dialog;
 
   let usage = $state(null);
@@ -38,6 +40,40 @@
   $effect(() => {
     if (open && faculty.role !== 'admin') open = false;
   });
+
+  // Bawaan RPS baru: formulir mengikuti nilai di server selama admin belum mengetiknya.
+  const pickDefaults = (d) => Object.fromEntries(DEFAULT_FIELDS.map(([k]) => [k, d[k] ?? '']));
+  let dflt = $state(pickDefaults(DEFAULTS));
+  let dfltEdited = $state(false);
+  let dfltBusy = $state(false);
+  $effect(() => {
+    const cur = pickDefaults(DEFAULTS);
+    if (!untrack(() => dfltEdited)) dflt = cur;
+  });
+  const tidyDefaults = (d) => Object.fromEntries(DEFAULT_FIELDS.map(([k, , , max]) => [k, d[k].trim().replace(/\s+/g, ' ').slice(0, max)]));
+  const dfltDirty = $derived(DEFAULT_FIELDS.some(([k]) => tidyDefaults(dflt)[k] !== DEFAULTS[k]));
+  async function saveDefaults(e) {
+    e?.preventDefault();
+    if (!dfltDirty || dfltBusy) return;
+    dfltBusy = true;
+    try {
+      const values = tidyDefaults(dflt);
+      await F.saveDefaults(values);
+      applyDefaults({ ...values, updatedAt: Date.now(), updatedByName: faculty.user.name });
+      dfltEdited = false;
+      dflt = pickDefaults(DEFAULTS); // tampilkan versi yang sudah dirapikan
+      onnotify?.('Bawaan RPS baru disimpan. Berlaku untuk RPS yang dibuat setelah ini.');
+    } catch (err) {
+      ui.alert(err.message);
+    } finally {
+      dfltBusy = false;
+    }
+  }
+  function resetDefaultsForm() {
+    dflt = pickDefaults(DEFAULTS);
+    dfltEdited = false;
+  }
+  const dfltWhen = $derived(defaultsMeta.updatedAt ? new Date(defaultsMeta.updatedAt).toLocaleString('id-ID', { dateStyle: 'long', timeStyle: 'short' }) : '');
 
   async function refreshAdmin() {
     try {
@@ -191,6 +227,26 @@
         {:else}
           <small>Memuat…</small>
         {/if}
+      </section>
+      {:else if view === 'defaults'}
+      <section>
+        <h3>Bawaan RPS baru</h3>
+        <small>
+          Isian awal kop setiap RPS baru, juga dipakai Asisten AI. RPS yang sudah ada tidak berubah.
+          {#if defaultsMeta.custom && dfltWhen}Terakhir diubah {defaultsMeta.updatedByName || 'admin'}, {dfltWhen}.{:else}<strong>Belum diatur:</strong> RPS baru dimulai dengan nama universitas dan fakultas kosong.{/if}
+        </small>
+        <form class="defaults" onsubmit={saveDefaults} oninput={() => (dfltEdited = true)}>
+          {#each DEFAULT_FIELDS as [k, label, hint, max] (k)}
+            <label>
+              <span>{label}</span>
+              <input maxlength={max} bind:value={dflt[k]} placeholder={hint} />
+            </label>
+          {/each}
+          <div class="row">
+            <button class="btn small primary" disabled={!dfltDirty || dfltBusy}><Icon name="save" size={14} />{dfltBusy ? 'Menyimpan…' : 'Simpan bawaan'}</button>
+            {#if dfltEdited}<button type="button" class="btn small ghost" onclick={resetDefaultsForm}>Batalkan perubahan</button>{/if}
+          </div>
+        </form>
       </section>
       {:else if view === 'members'}
       <section>
@@ -415,6 +471,22 @@
   .add-btn:disabled {
     opacity: 0.5;
     cursor: default;
+  }
+  .defaults {
+    display: grid;
+    gap: 0.45rem;
+    margin-top: 0.5rem;
+  }
+  .defaults label {
+    display: grid;
+    grid-template-columns: 9.5rem 1fr;
+    align-items: start;
+    gap: 0.6rem;
+    font-size: 0.85rem;
+  }
+  .defaults label > span {
+    padding-top: 0.4rem;
+    color: var(--muted);
   }
   .admin select {
     width: auto;

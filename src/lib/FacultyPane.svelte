@@ -1571,7 +1571,7 @@
                 {@render pick(row)}
                 <button class="main" onclick={(e) => rowClick(e, row, () => enterFolder(f.id))} onfocus={() => (cursor = row.key)}>
                   <strong><Icon name="folder" size={18} /> {f.name} {#each accessTags(f) as t}<em class:shared={F.isShared(f)}>{t}</em>{/each}</strong>
-                  <small>{#if searching && parent}<span>di {pathText(parent)}</span>{/if}<span class="hov">{folderInfo(f)}</span></small>
+                  <small>{#if searching && parent}<span>di {pathText(parent)}</span>{/if}<span>{folderInfo(f)}</span></small>
                 </button>
                 <span class="acts" role="group" aria-label="Tindakan folder">
                   {@render ib('users', accessTip(f), () => openAccess('folders', f))}
@@ -1596,7 +1596,7 @@
                     {#if openCount(s)}<em class="notes" title="Komentar yang belum ditandai selesai">{openCount(s)} komentar</em>{/if}
                   </strong>
                   <small title={`Terakhir diubah ${when(s.updatedAt)} oleh ${s.updatedByName}`}>
-                    {#if searching && folderOf(s)}<span>di {pathText(folderOf(s))}</span>{/if}{#if only === 'due'}<span>disusun {formatTanggal(s.since)}</span>{/if}<span class="hov">Diubah {ago(s.updatedAt)}</span>
+                    {#if searching && folderOf(s)}<span>di {pathText(folderOf(s))}</span>{/if}{#if only === 'due'}<span>disusun {formatTanggal(s.since)}</span>{/if}<span>Diubah {ago(s.updatedAt)}</span>
                   </small>
                   {#if editors}<small class="editing">🔒 Terkunci, sedang diedit oleh {editors}</small>{/if}
                 </button>
@@ -2147,13 +2147,6 @@
   }
   .main small > span + span::before {
     content: ' · ';
-  }
-  /* Keterangan tambahan hanya muncul saat baris disorot (perangkat sentuh tetap menampilkannya).
-     Tempatnya tetap disediakan agar tinggi baris tidak berubah. */
-  @media (hover: hover) {
-    .list > li:not(:hover):not(:focus-within) .main small .hov {
-      visibility: hidden;
-    }
   }
   .main small.editing {
     color: var(--danger);

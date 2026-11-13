@@ -862,6 +862,43 @@ export function watchEditing() {
   };
 }
 
+// ---- Bawaan RPS baru (universitas, fakultas): dibaca semua anggota, hanya admin yang mengubah ----
+
+const DEFAULTS_DOC = 'config/rps';
+
+/** Mengikuti bawaan dari admin; onChange(data | null) setiap berubah (null = belum pernah diatur). */
+export function watchDefaults(onChange) {
+  let stop = null;
+  let dead = false;
+  load()
+    .then(({ F, db }) => {
+      if (dead) return;
+      stop = F.onSnapshot(
+        F.doc(db, DEFAULTS_DOC),
+        (snap) => {
+          if (!snap.exists()) return onChange(null);
+          const d = snap.data({ serverTimestamps: 'estimate' });
+          onChange({ ...d, updatedAt: ms(d.updatedAt) });
+        },
+        () => {} // luring atau belum diizinkan: bawaan yang tersimpan di browser tetap dipakai
+      );
+    })
+    .catch(() => {});
+  return () => {
+    dead = true;
+    stop?.();
+  };
+}
+
+/** Admin: menyimpan bawaan baru (`values`: kunci DEFAULT_FIELDS). */
+export async function saveDefaults(values) {
+  const { F, db } = await load();
+  const { uid, name } = faculty.user;
+  await F.setDoc(F.doc(db, DEFAULTS_DOC), { ...values, updatedAt: F.serverTimestamp(), updatedBy: uid, updatedByName: name }).catch((e) => {
+    throw new Error(e?.code === 'permission-denied' ? 'Server menolak. Hanya admin yang bisa mengubah bawaan RPS.' : readable(e));
+  });
+}
+
 // ---- Khusus admin ----
 
 export async function getUsage() {

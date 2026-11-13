@@ -3,6 +3,7 @@
   import { useRegisterSW } from 'virtual:pwa-register/svelte';
   import { app, persist, tabs, stash, newTabId, saveSession, loadSession } from './lib/store.svelte.js';
   import { emptyDocument, parseDocumentText, docTitle, importCatalog, setMeta } from './lib/model.js';
+  import { applyDefaults } from './lib/appDefaults.svelte.js';
   import CurriculumDialog from './lib/CurriculumDialog.svelte';
   import AiDialog from './lib/AiDialog.svelte';
   import { sampleDocument } from './lib/sample.js';
@@ -890,6 +891,10 @@
   $effect(() => {
     if (faculty.status !== 'in') return void (notes.mine = []);
     return Faculty.watchMentions((list) => (notes.mine = list));
+  });
+  // Bawaan RPS baru (universitas, fakultas) yang diatur admin; tetap memakai salinan di browser saat luring.
+  $effect(() => {
+    if (faculty.status === 'in') return Faculty.watchDefaults(applyDefaults);
   });
 
   /** Daftar pustaka baru dimuat: tab yang terbuka mengikuti hak akses terbaru. */

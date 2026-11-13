@@ -162,14 +162,35 @@ export function duplicateItem(item) {
   return { ...JSON.parse(JSON.stringify(item)), id: uid() };
 }
 
+// Nama universitas dan fakultas untuk RPS baru, diatur admin (lihat appDefaults.svelte.js). Sengaja tidak ada nilai
+// yang ditulis di kode. Salinan di browser dibaca langsung di sini karena dokumen awal dibuat sebelum modul lain siap.
+export const DEFAULTS_KEY = 'rps-defaults';
+let kop = null;
+function docDefaults() {
+  if (!kop) {
+    try {
+      const c = JSON.parse(localStorage.getItem(DEFAULTS_KEY) ?? 'null');
+      kop = { universitas: String(c?.universitas ?? ''), fakultas: String(c?.fakultas ?? '') };
+    } catch {
+      kop = { universitas: '', fakultas: '' };
+    }
+  }
+  return kop;
+}
+/** Dipanggil appDefaults saat bawaan dari server berubah. */
+export function setDocDefaults({ universitas = '', fakultas = '' }) {
+  kop = { universitas, fakultas };
+}
+
 export function emptyDocument() {
   const year = new Date().getFullYear();
+  const d = docDefaults();
   return {
     format: FORMAT,
     version: VERSION,
     identitas: {
-      universitas: 'UNIVERSITAS BRAWIJAYA',
-      fakultas: 'FAKULTAS ILMU KOMPUTER',
+      universitas: d.universitas,
+      fakultas: d.fakultas,
       departemen: '',
       prodi: '',
       mataKuliah: '',

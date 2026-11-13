@@ -5,6 +5,7 @@
   import { docTitle } from './model.js';
   import { app } from './store.svelte.js';
   import { dismiss } from './dismiss.js';
+  import { DEFAULTS, hasDefaults } from './appDefaults.svelte.js';
 
   /** onpaste(text, revise) → true bila jawaban berhasil dibuka. */
   let { open = $bindable(false), docKey, onpaste } = $props();
@@ -30,10 +31,10 @@
     !open
       ? ''
       : draft.mode === 'import'
-        ? aiImportPrompt(draft.note, draft.keepKop)
+        ? aiImportPrompt(draft.note, draft.keepKop, { ...DEFAULTS })
         : draft.mode === 'revise'
           ? aiRevisePrompt($state.snapshot(app.doc), draft.instruction)
-          : aiPrompt(draft.description)
+          : aiPrompt(draft.description, { ...DEFAULTS })
   );
 
   $effect(() => {
@@ -109,10 +110,12 @@
       <small class="hint">Sebutkan kode dan teks CPL/CPMK dari kurikulum bila ada; atau pakai tombol Kurikulum setelah hasilnya dibuka.</small>
     {:else}
       <p>Buka chat baru di asisten AI, lalu lampirkan berkas RPS lama (unggah PDF/DOCX atau foto setiap halaman).</p>
-      <label class="check">
-        <input type="checkbox" bind:checked={draft.keepKop} />
-        <span>Salin nama universitas dan fakultas dari dokumen (bila tidak, diisi Universitas Brawijaya, FILKOM)</span>
-      </label>
+      {#if hasDefaults()}
+        <label class="check">
+          <input type="checkbox" bind:checked={draft.keepKop} />
+          <span>Salin nama universitas dan fakultas dari dokumen (bila tidak, diisi {[DEFAULTS.universitas, DEFAULTS.fakultas].filter(Boolean).join(', ')})</span>
+        </label>
+      {/if}
       <label class="field">
         <textarea rows="4" aria-label="Catatan untuk AI (opsional)" bind:value={draft.note} placeholder="Catatan untuk AI (opsional). Contoh: tahun akademik diganti 2026/2027; tanggal penyusunan diganti hari ini."></textarea>
       </label>

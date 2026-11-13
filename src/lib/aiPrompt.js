@@ -69,6 +69,13 @@ const EXAMPLE = {
   ]
 };
 
+/** Potongan aturan `"universitas" diisi "…" dan "fakultas" diisi "…"` untuk kolom kop yang diatur admin; '' bila tidak ada. */
+const kopRule = (kop) =>
+  ['universitas', 'fakultas']
+    .filter((k) => kop?.[k])
+    .map((k) => `"${k}" diisi ${JSON.stringify(kop[k])}`)
+    .join(' dan ');
+
 /** Aturan struktur JSON yang sama untuk ketiga prompt. */
 const formatRules = (identitas) => `ATURAN FORMAT:
 - Keluarkan HANYA satu objek JSON yang valid, tanpa penjelasan di luar JSON. Jika bisa, berikan juga sebagai berkas .json yang dapat diunduh. Jangan memotong jawaban; bila terlalu panjang, lanjutkan sampai JSON lengkap.
@@ -90,7 +97,8 @@ ${identitas}
 - Format teks: isian "deskripsi", "materi", "mediaLunak", "mediaKeras", "pengalamanBelajar", "prasyarat", serta teks CPL/CPMK/Sub-CPMK/pustaka/asesmen/pertemuan/lembar kerja boleh memakai <b>tebal</b>, <i>miring</i>, dan <u>garis bawah</u>. Jangan memakai Markdown (**…**) atau tag lain. Isian lain teks polos.
 - Baris baru ditulis \\n. Daftar: satu butir per baris, diawali "• " untuk poin atau "1. ", "2. ", … untuk nomor.`;
 
-export function aiPrompt(description = '') {
+/** `kop`: bawaan universitas/fakultas dari admin (lihat appDefaults.svelte.js); kosong = ikuti deskripsi. */
+export function aiPrompt(description = '', kop = {}) {
   const desc =
     description.trim() ||
     '[TULIS DI SINI: nama dan kode mata kuliah, prodi, SKS teori/praktikum, semester, dosen, CPL/CPMK yang didukung, pokok bahasan, dan rencana penilaian]';
@@ -101,7 +109,7 @@ export function aiPrompt(description = '') {
 DESKRIPSI MATA KULIAH:
 ${desc}
 
-${formatRules(`- identitas: isi semua kolom yang disebut deskripsi. Nama dosen, koordinator, dan kaprodi yang tidak disebut diisi "" (jangan mengarang nama). "tglPenyusunan" diisi "${today}" dan "tahun" "${year}" kecuali deskripsi menyebut lain.
+${formatRules(`- identitas: isi semua kolom yang disebut deskripsi. Nama dosen, koordinator, dan kaprodi yang tidak disebut diisi "" (jangan mengarang nama). "tglPenyusunan" diisi "${today}" dan "tahun" "${year}"${kopRule(kop) ? `, ${kopRule(kop)},` : ''} kecuali deskripsi menyebut lain.
 - CPL dan CPMK: gunakan yang disebut deskripsi apa adanya (kode dan teks). Bila tidak disebut, susun usulan dan beri kode "[lengkapi]" agar pengguna menggantinya dengan kode dari kurikulum prodi.
 - Pustaka: gunakan buku/artikel yang benar-benar ada; bila ragu, tulis "[lengkapi: …]" alih-alih mengarang judul.`)}
 - Susun 16 pekan lengkap (termasuk UTS dan UAS), Sub-CPMK yang semuanya dinilai asesmen dan muncul di tabel pertemuan, serta Lembar Kerja untuk setiap asesmen berbentuk tugas/case based.
@@ -136,13 +144,13 @@ ${JSON.stringify(doc, null, 2)}`;
 
 /**
  * Prompt untuk menyalin RPS lama yang dilampirkan pengguna di chat AI.
- * `keepKop`: universitas/fakultas disalin dari dokumen; bila false, diisi bawaan aplikasi.
+ * `keepKop`: universitas/fakultas disalin dari dokumen; bila false, diisi bawaan dari admin (`kop`) bila ada.
  */
-export function aiImportPrompt(note = '', keepKop = false) {
+export function aiImportPrompt(note = '', keepKop = false, kop = {}) {
   const extra = note.trim() ? `\nCATATAN TAMBAHAN DARI PENGGUNA (utamakan bila bertentangan dengan aturan di bawah):\n${note.trim()}\n` : '';
-  const identitas = keepKop
+  const identitas = keepKop || !kopRule(kop)
     ? '- identitas: salin semua kolom dari dokumen apa adanya.'
-    : `- identitas: salin dari dokumen, kecuali "universitas" diisi "${EXAMPLE.identitas.universitas}" dan "fakultas" "${EXAMPLE.identitas.fakultas}".`;
+    : `- identitas: salin dari dokumen, kecuali ${kopRule(kop)}.`;
   return `Saya melampirkan dokumen Rencana Pembelajaran Semester (RPS) lama, berupa PDF, Word, atau foto/pindaian. Salin isinya menjadi JSON untuk aplikasi "RPS Editor".
 ${extra}
 CARA MEMBACA DOKUMEN:
