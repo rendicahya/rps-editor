@@ -1,6 +1,7 @@
 <script>
   import { tick } from 'svelte';
   import { asks, answer } from './ask.svelte.js';
+  import { dismiss } from './dismiss.js';
 
   let dialog;
   let input = $state();
@@ -32,7 +33,7 @@
   }
 </script>
 
-<dialog bind:this={dialog} class="dialog ask" oncancel={cancel}>
+<dialog bind:this={dialog} class="dialog ask" use:dismiss={cancel} oncancel={cancel}>
   {#if req}
     <form onsubmit={ok}>
       {#if req.title}<h2>{req.title}</h2>{/if}

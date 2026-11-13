@@ -3,6 +3,7 @@
   import { checkDocument } from './validate.js';
   import { review, isReviewDue } from './review.svelte.js';
   import { dismiss } from './dismiss.js';
+  import Icon from './Icon.svelte';
   import * as F from './faculty.svelte.js';
 
   /**
@@ -145,7 +146,7 @@
         <small>{title} · {rows.length} RPS</small>
       </div>
       <span class="actions">
-        <button type="button" class="btn" onclick={downloadCsv} disabled={!rows.length && !missing.length} title="Unduh laporan sebagai CSV (bisa dibuka di Excel)">Unduh CSV</button>
+        <button type="button" class="btn" onclick={downloadCsv} disabled={!rows.length && !missing.length} title="Unduh laporan sebagai CSV (bisa dibuka di Excel)"><Icon name="download" size={15} />Unduh CSV</button>
         <button type="button" class="btn" onclick={() => (open = false)}>Tutup</button>
       </span>
     </header>

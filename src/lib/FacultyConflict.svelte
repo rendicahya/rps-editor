@@ -1,5 +1,6 @@
 <script>
   import Icon from './Icon.svelte';
+  import { dismiss } from './dismiss.js';
   // Pilihan saat penyimpanan ke Pustaka Daring bertabrakan. info: { canOverwrite, by, at, message } atau null.
   let { info, onchoice } = $props();
   let dialog;
@@ -12,7 +13,7 @@
   const when = (ms) => new Date(ms).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
 </script>
 
-<dialog bind:this={dialog} class="dialog" oncancel={() => onchoice('cancel')}>
+<dialog bind:this={dialog} class="dialog" use:dismiss={() => onchoice('cancel')} oncancel={() => onchoice('cancel')}>
   {#if info}
     <h2>{info.canOverwrite ? 'RPS sudah diubah orang lain' : 'RPS tidak bisa disimpan lagi'}</h2>
     {#if info.canOverwrite}
@@ -24,7 +25,7 @@
       <p>{info.message} Pekerjaan Anda tidak hilang, karena masih bisa disimpan sebagai salinan milik Anda.</p>
     {/if}
     <footer>
-      <button class="btn" onclick={() => onchoice('cancel')}>Batal</button>
+      <button class="btn" onclick={() => onchoice('cancel')}><Icon name="x" size={15} />Batal</button>
       <button class="btn" class:primary={!info.canOverwrite} onclick={() => onchoice('copy')}><Icon name="copy" size={15} />Simpan sebagai salinan</button>
       {#if info.canOverwrite}<button class="btn primary" onclick={() => onchoice('overwrite')}><Icon name="save" size={15} />Timpa dengan versi saya</button>{/if}
     </footer>

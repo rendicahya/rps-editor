@@ -3,6 +3,8 @@
   import * as Faculty from './faculty.svelte.js';
   import { faculty } from './faculty.svelte.js';
   import { uid } from './model.js';
+  import { dismiss } from './dismiss.js';
+  import Icon from './Icon.svelte';
 
   /**
    * Katalog kurikulum: CPL/CPMK per prodi di Pustaka Daring (curricula/{id}).
@@ -180,11 +182,11 @@
   }
 </script>
 
-<dialog bind:this={dialog} class="dialog" onclose={() => (open = false)} oncancel={(e) => (e.preventDefault(), close())}>
+<dialog bind:this={dialog} class="dialog" use:dismiss={close} onclose={() => (open = false)} oncancel={(e) => (e.preventDefault(), close())}>
   <header>
     <strong>Katalog Kurikulum</strong>
     <span class="sub">CPL, CPMK, dan mata kuliah per program studi, dipakai bersama semua dosen</span>
-    <button class="x" onclick={close} aria-label="Tutup">✕</button>
+    <button class="x" onclick={close} aria-label="Tutup" title="Tutup (Esc)"><Icon name="x" size={16} /></button>
   </header>
   {#if !signedIn}
     <p class="note">Katalog kurikulum ada di Pustaka Daring. {faculty.status === 'loading' ? 'Memuat…' : 'Masuk dulu untuk membukanya.'}</p>
@@ -203,7 +205,7 @@
             <li class="empty">{busy ? 'Memuat…' : 'Belum ada prodi.'}</li>
           {/each}
         </ul>
-        {#if admin}<button class="btn small" onclick={addProdi} disabled={busy}>+ Prodi</button>{/if}
+        {#if admin}<button class="btn small" onclick={addProdi} disabled={busy}><Icon name="plus" size={14} />Prodi</button>{/if}
       </aside>
       <section>
         {#if error}<p class="error">{error}</p>{/if}
@@ -229,14 +231,14 @@
                   <td class="c"><input type="checkbox" checked={pickCpl.has(c.id)} onchange={() => (pickCpl = flip(pickCpl, c.id))} aria-label="Pakai {c.kode}" /></td>
                   <td class="k">{#if editable}<input bind:value={c.kode} placeholder="CPL01" />{:else}{c.kode}{/if}</td>
                   <td>{#if editable}<textarea rows="2" bind:value={c.teks}></textarea>{:else}{c.teks}{/if}</td>
-                  {#if editable}<td class="c"><button class="del" onclick={() => removeCpl(i)} title="Hapus CPL" aria-label="Hapus CPL">✕</button></td>{/if}
+                  {#if editable}<td class="c"><button class="del" onclick={() => removeCpl(i)} title="Hapus CPL" aria-label="Hapus CPL"><Icon name="trash" size={14} /></button></td>{/if}
                 </tr>
               {:else}
                 <tr><td colspan="4" class="empty">Belum ada CPL.</td></tr>
               {/each}
             </tbody>
           </table>
-          {#if editable}<button class="btn small" onclick={addCpl}>+ CPL</button>{/if}
+          {#if editable}<button class="btn small" onclick={addCpl}><Icon name="plus" size={14} />CPL</button>{/if}
 
           <h3>CPMK</h3>
           <table>
@@ -259,14 +261,14 @@
                       {/each}
                     </span>
                   </td>
-                  {#if editable}<td class="c"><button class="del" onclick={() => draft.cpmk.splice(i, 1)} title="Hapus CPMK" aria-label="Hapus CPMK">✕</button></td>{/if}
+                  {#if editable}<td class="c"><button class="del" onclick={() => draft.cpmk.splice(i, 1)} title="Hapus CPMK" aria-label="Hapus CPMK"><Icon name="trash" size={14} /></button></td>{/if}
                 </tr>
               {:else}
                 <tr><td colspan="5" class="empty">Belum ada CPMK.</td></tr>
               {/each}
             </tbody>
           </table>
-          {#if editable}<button class="btn small" onclick={addCpmk}>+ CPMK</button>{/if}
+          {#if editable}<button class="btn small" onclick={addCpmk}><Icon name="plus" size={14} />CPMK</button>{/if}
 
           <div class="tbl-head">
             <h3>Mata Kuliah <small class="sub">{draft.mk.length ? `${draft.mk.length} mata kuliah, ${draft.mk.reduce((n, m) => n + (Number(m.sks) || 0), 0)} SKS` : 'untuk laporan kelengkapan RPS'}</small></h3>
@@ -280,7 +282,7 @@
                   <td>{#if editable}<input bind:value={m.nama} />{:else}{m.nama}{/if}</td>
                   <td class="n">{#if editable}<input type="number" min="0" max="24" bind:value={m.sks} />{:else}{m.sks || ''}{/if}</td>
                   <td class="n">{#if editable}<input type="number" min="0" max="14" bind:value={m.semester} />{:else}{m.semester || ''}{/if}</td>
-                  {#if editable}<td class="c"><button class="del" onclick={() => draft.mk.splice(i, 1)} title="Hapus mata kuliah" aria-label="Hapus mata kuliah">✕</button></td>{/if}
+                  {#if editable}<td class="c"><button class="del" onclick={() => draft.mk.splice(i, 1)} title="Hapus mata kuliah" aria-label="Hapus mata kuliah"><Icon name="trash" size={14} /></button></td>{/if}
                 </tr>
               {:else}
                 <tr><td colspan="5" class="empty">Belum ada daftar mata kuliah. Dengan daftar ini, laporan kelengkapan bisa menunjukkan mata kuliah yang belum punya RPS.</td></tr>
@@ -289,14 +291,14 @@
           </table>
           {#if editable}
             <div class="row-btns">
-              <button class="btn small" onclick={addMk}>+ Mata kuliah</button>
-              <button class="btn small" onclick={() => (pasteOpen = !pasteOpen)} aria-expanded={pasteOpen}>Tempel dari Excel…</button>
+              <button class="btn small" onclick={addMk}><Icon name="plus" size={14} />Mata kuliah</button>
+              <button class="btn small" onclick={() => (pasteOpen = !pasteOpen)} aria-expanded={pasteOpen}><Icon name="paste" size={14} />Tempel dari Excel…</button>
             </div>
             {#if pasteOpen}
               <div class="paste">
                 <p class="note">Salin kolom <b>Kode, Nama, SKS, Semester</b> (urutan ini) dari Excel, lalu tempel di sini. Satu mata kuliah per baris; baris judul dilewati.</p>
                 <textarea rows="6" bind:value={pasteText} placeholder={'COM60004\tPemrograman Dasar\t3\t1'}></textarea>
-                <button class="btn small primary" onclick={pasteMk} disabled={!pasteText.trim()}>Tambahkan</button>
+                <button class="btn small primary" onclick={pasteMk} disabled={!pasteText.trim()}><Icon name="plus" size={14} />Tambahkan</button>
               </div>
             {/if}
           {/if}
@@ -306,14 +308,14 @@
       </section>
     </div>
     <footer>
-      {#if admin && sel}<button class="btn danger-text" onclick={removeProdi} disabled={busy}>Hapus prodi</button>{/if}
+      {#if admin && sel}<button class="btn danger-text" onclick={removeProdi} disabled={busy}><Icon name="trash" size={15} />Hapus prodi</button>{/if}
       <span class="grow"></span>
       {#if sel}
         <button class="btn" onclick={use} disabled={!cansave || busy || (!pickCpl.size && !pickCpmk.size)} title={dirty ? 'Yang dipakai adalah isi katalog yang tersimpan' : 'Salin CPL/CPMK yang dicentang ke RPS yang sedang dibuka'}>
-          Pakai di RPS ini ({pickCpl.size + pickCpmk.size})
+          <Icon name="import" size={15} />Pakai di RPS ini ({pickCpl.size + pickCpmk.size})
         </button>
       {/if}
-      {#if editable}<button class="btn primary" onclick={save} disabled={busy || !dirty}>{busy ? 'Menyimpan…' : 'Simpan katalog'}</button>{/if}
+      {#if editable}<button class="btn primary" onclick={save} disabled={busy || !dirty}><Icon name="save" size={15} />{busy ? 'Menyimpan…' : 'Simpan katalog'}</button>{/if}
     </footer>
   {/if}
 </dialog>
@@ -351,6 +353,8 @@
     flex: 1;
   }
   .x {
+    display: inline-flex;
+    padding: 0.2rem;
     border: 0;
     background: none;
     color: var(--muted);
@@ -531,6 +535,8 @@
     color: #fff;
   }
   .del {
+    display: inline-flex;
+    padding: 0.2rem;
     border: 0;
     background: none;
     color: var(--danger, #b42318);

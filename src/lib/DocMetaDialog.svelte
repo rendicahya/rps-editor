@@ -1,6 +1,7 @@
 <script>
   import Icon from './Icon.svelte';
   import { tick } from 'svelte';
+  import { dismiss } from './dismiss.js';
   import { META_FIELDS, defaultMeta } from './model.js';
 
   /**
@@ -35,7 +36,7 @@
   }
 </script>
 
-<dialog bind:this={dialog} class="dialog" onclose={() => (open = false)}>
+<dialog bind:this={dialog} class="dialog" use:dismiss onclose={() => (open = false)}>
   {#if open}
     <form onsubmit={(e) => (e.preventDefault(), save())}>
       <h2>Properti dokumen</h2>
@@ -60,7 +61,7 @@
           class="btn ghost reset"
           disabled={META_FIELDS.every(({ key }) => !values[key]?.trim())}
           onclick={() => (values = Object.fromEntries(META_FIELDS.map(({ key }) => [key, ''])))}
-        >Pakai bawaan</button>
+        ><Icon name="undo" size={15} />Pakai bawaan</button>
         <button type="button" class="btn" onclick={() => (open = false)}>Batal</button>
         <button class="btn primary"><Icon name="save" size={15} />Simpan</button>
       </footer>
