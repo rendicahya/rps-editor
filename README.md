@@ -102,13 +102,22 @@ Sudah ada:
     RPS-nya), semua CPL katalog tampil sehingga CPL yang belum dinilai mata kuliah mana pun terlihat, dan kode di luar
     katalog ditandai. Juga diingatkan: CPL yang hanya dinilai satu mata kuliah dan RPS yang bobot asesmennya bukan
     100%. Bisa diunduh sebagai CSV (Excel); klik nama mata kuliah untuk membukanya.
+  - **Kelengkapan RPS** (pilih RPS atau folder › **Kelengkapan**, atau klik kanan folder › **Kelengkapan RPS isinya…**):
+    laporan untuk pengelola prodi. Tiap RPS diberi status dari Periksa: **Belum lengkap** (ada temuan error),
+    **Perlu perhatian** (ada peringatan, komentar yang belum selesai, perlu ditinjau ulang, atau catatan katalog), atau
+    **Siap**; jumlah temuan, dosen pengelola, dan waktu terakhir diubah ikut tampil (arahkan kursor ke angka untuk melihat
+    temuannya). Bila katalog kurikulumnya punya daftar mata kuliah, laporan juga menunjukkan mata kuliah yang **belum
+    punya RPS**, kode RPS yang tidak ada di katalog, SKS yang berbeda dari katalog, dan RPS ganda berkode sama. Bisa
+    disaring ke yang perlu ditindaklanjuti saja dan diunduh sebagai CSV.
   - **Unggah banyak sekaligus**: seret berkas `.rps` atau ZIP berisi `.rps` ke daftar atau ke
     folder di pohon (atau tombol unggah berkas / menu klik kanan), maksimal 500 berkas. Subfolder di dalam ZIP dibuat
     ulang; folder bernama sama yang milik Anda dipakai. PDF dan DOCX hasil ekspor RPS Editor juga diterima. Berkas yang tidak
     terbaca dilewati dan disebutkan alasannya; unggahan berhenti bila penyimpanan penuh.
-- **Katalog Kurikulum** (tombol **Kurikulum**): CPL dan CPMK per prodi di Pustaka Daring.
+- **Katalog Kurikulum** (tombol **Kurikulum**): CPL, CPMK, dan daftar mata kuliah per prodi di Pustaka Daring.
   - Admin menambah/menghapus prodi dan menunjuk **pengelola prodi** (email).
   - Pengelola prodi (dan admin) mengedit CPL/CPMK prodinya beserta relasi CPMK → CPL.
+  - Daftar mata kuliah (kode, nama, SKS, semester) dipakai laporan Kelengkapan RPS. Isi satu per satu, atau
+    **Tempel dari Excel…**: salin kolom Kode, Nama, SKS, Semester lalu tempel; baris judul dan kode yang sudah ada dilewati.
   - Semua anggota bisa mencentang CPL/CPMK lalu **Pakai di RPS ini**: disalin ke RPS aktif (satu langkah Undo);
     CPL yang didukung CPMK terpilih ikut disalin, kode yang sudah ada tidak diduplikasi, prodi/departemen yang
     masih kosong diisi dari katalog.
@@ -158,7 +167,7 @@ Rancangan koleksi RPS:
 | `rps/{id}/comments/{cid}` | komentar peninjauan dan balasannya (`parent` null = komentar utama) |
 | `rpsFolders/{id}` | folder Pustaka Daring RPS |
 | `rpsLocks/{id}` | kunci edit `{ uid, name, at }`: RPS yang sedang dibuka pemegang hak edit |
-| `curricula/{prodiId}` | `{ nama, departemen, managers: [email], cpl, cpmk }`; diedit pengelola prodi dan admin |
+| `curricula/{prodiId}` | `{ nama, departemen, managers: [email], cpl, cpmk, mk? }` (`mk`: `[{ id, kode, nama, sks, semester }]`); diedit pengelola prodi dan admin |
 
 Aplikasi ini berbagi origin dengan aplikasi lain di GitHub Pages, jadi semua kunci `localStorage`/IndexedDB berawalan
 `rps-editor`. Pengecualian: font Calibri disimpan di basis data font bersama agar cukup dipilih sekali.

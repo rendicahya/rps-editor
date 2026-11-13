@@ -973,7 +973,7 @@ export async function listCurricula() {
 }
 
 /** Menulis seluruh isi katalog `id` (membuat bila belum ada; hanya admin yang boleh membuat). */
-export async function saveCurriculum(id, { nama, departemen, managers, cpl, cpmk }) {
+export async function saveCurriculum(id, { nama, departemen, managers, cpl, cpmk, mk = [] }) {
   const { F, db } = await load();
   const data = {
     nama: nama.trim().slice(0, 120), departemen: (departemen ?? '').trim().slice(0, 120),
@@ -982,7 +982,15 @@ export async function saveCurriculum(id, { nama, departemen, managers, cpl, cpmk
     cpmk: cpmk.map(({ id, kode, teks, cpl }) => ({ id, kode, teks, cpl: [...cpl] })),
     updatedAt: F.serverTimestamp(), updatedBy: faculty.user.uid, updatedByName: faculty.user.name
   };
+  // Daftar mata kuliah kurikulum (untuk laporan kelengkapan RPS). Hanya ditulis bila ada isinya, agar katalog tanpa
+  // daftar ini tetap bisa disimpan dengan aturan Firestore yang belum mengenal kunci `mk`.
+  const mks = mk
+    .map(({ id, kode, nama, sks, semester }) => ({ id, kode: String(kode ?? '').trim().slice(0, 40), nama: String(nama ?? '').trim().slice(0, 200), sks: Number(sks) || 0, semester: Number(semester) || 0 }))
+    .filter((m) => m.kode || m.nama);
+  if (mks.length) data.mk = mks;
   await F.setDoc(F.doc(db, 'curricula', id), data).catch((e) => {
+    if (e?.code === 'permission-denied' && data.mk && canEditCurriculum({ managers }))
+      throw new Error('Katalog dengan daftar mata kuliah ditolak server: aturan Firestore belum mengizinkan daftar mata kuliah (kunci `mk` di validCurriculum). Minta admin memperbarui aturannya, atau kosongkan daftar mata kuliah dulu.');
     throw new Error(e?.code === 'permission-denied' ? 'Anda tidak berhak mengubah katalog prodi ini.' : readable(e));
   });
 }

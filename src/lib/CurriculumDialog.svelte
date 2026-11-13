@@ -64,11 +64,12 @@
     selId = id;
     const c = list.find((x) => x.id === id);
     draft = c
-      ? { nama: c.nama, departemen: c.departemen ?? '', managers: (c.managers ?? []).join('\n'), cpl: structuredClone(c.cpl ?? []), cpmk: structuredClone(c.cpmk ?? []) }
+      ? { nama: c.nama, departemen: c.departemen ?? '', managers: (c.managers ?? []).join('\n'), cpl: structuredClone(c.cpl ?? []), cpmk: structuredClone(c.cpmk ?? []), mk: structuredClone(c.mk ?? []) }
       : null;
     saved = JSON.stringify(draft);
     pickCpl = new Set();
     pickCpmk = new Set();
+    pasteOpen = false;
   }
 
   const slug = (s) => s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 60);
@@ -116,6 +117,40 @@
     }
   }
 
+  // Daftar mata kuliah kurikulum: dipakai laporan kelengkapan RPS (mata kuliah mana yang belum punya RPS).
+  let pasteOpen = $state(false);
+  let pasteText = $state('');
+  const addMk = () => draft.mk.push({ id: uid(), kode: '', nama: '', sks: 0, semester: 0 });
+  /** Baris dari Excel (tab) atau CSV (; atau ,): kode, nama, SKS, semester. Baris judul dan kode yang sudah ada dilewati. */
+  function pasteMk() {
+    const have = new Set(draft.mk.map((m) => m.kode.trim().toLowerCase()));
+    let added = 0;
+    let skipped = 0;
+    for (const line of pasteText.split(/\r?\n/)) {
+      if (!line.trim()) continue;
+      const cols = (line.includes('\t') ? line.split('\t') : line.split(/[;,](?=(?:[^"]*"[^"]*")*[^"]*$)/)).map((s) => s.trim().replace(/^"|"$/g, ''));
+      const [kode = '', nama = '', sks = '', semester = ''] = cols;
+      if (!kode || (sks && !/^\d+([.,]\d+)?$/.test(sks))) {
+        skipped++;
+        continue;
+      }
+      const key = kode.toLowerCase();
+      if (have.has(key)) {
+        skipped++;
+        continue;
+      }
+      have.add(key);
+      draft.mk.push({ id: uid(), kode, nama, sks: Number(sks.replace(',', '.')) || 0, semester: Number(semester) || 0 });
+      added++;
+    }
+    pasteText = '';
+    pasteOpen = false;
+    ui.alert(`${added} mata kuliah ditambahkan${skipped ? `, ${skipped} baris dilewati (judul, tanpa kode, atau kodenya sudah ada)` : ''}. Jangan lupa Simpan katalog.`);
+  }
+  const mkSorted = $derived(
+    draft ? draft.mk.map((m, i) => ({ m, i })).sort((a, b) => (a.m.semester || 99) - (b.m.semester || 99) || a.m.kode.localeCompare(b.m.kode, 'id', { numeric: true })) : []
+  );
+
   const addCpl = () => draft.cpl.push({ id: uid(), kode: '', teks: '' });
   const addCpmk = () => draft.cpmk.push({ id: uid(), kode: '', teks: '', cpl: [] });
   function removeCpl(i) {
@@ -148,7 +183,7 @@
 <dialog bind:this={dialog} class="dialog" onclose={() => (open = false)} oncancel={(e) => (e.preventDefault(), close())}>
   <header>
     <strong>Katalog Kurikulum</strong>
-    <span class="sub">CPL dan CPMK per program studi, dipakai bersama semua dosen</span>
+    <span class="sub">CPL, CPMK, dan mata kuliah per program studi, dipakai bersama semua dosen</span>
     <button class="x" onclick={close} aria-label="Tutup">✕</button>
   </header>
   {#if !signedIn}
@@ -232,6 +267,39 @@
             </tbody>
           </table>
           {#if editable}<button class="btn small" onclick={addCpmk}>+ CPMK</button>{/if}
+
+          <div class="tbl-head">
+            <h3>Mata Kuliah <small class="sub">{draft.mk.length ? `${draft.mk.length} mata kuliah, ${draft.mk.reduce((n, m) => n + (Number(m.sks) || 0), 0)} SKS` : 'untuk laporan kelengkapan RPS'}</small></h3>
+          </div>
+          <table>
+            <thead><tr><th class="k">Kode</th><th>Nama mata kuliah</th><th class="n">SKS</th><th class="n">Semester</th>{#if editable}<th class="c"></th>{/if}</tr></thead>
+            <tbody>
+              {#each mkSorted as { m, i } (m.id)}
+                <tr>
+                  <td class="k">{#if editable}<input bind:value={m.kode} placeholder="COM60004" />{:else}{m.kode}{/if}</td>
+                  <td>{#if editable}<input bind:value={m.nama} />{:else}{m.nama}{/if}</td>
+                  <td class="n">{#if editable}<input type="number" min="0" max="24" bind:value={m.sks} />{:else}{m.sks || ''}{/if}</td>
+                  <td class="n">{#if editable}<input type="number" min="0" max="14" bind:value={m.semester} />{:else}{m.semester || ''}{/if}</td>
+                  {#if editable}<td class="c"><button class="del" onclick={() => draft.mk.splice(i, 1)} title="Hapus mata kuliah" aria-label="Hapus mata kuliah">✕</button></td>{/if}
+                </tr>
+              {:else}
+                <tr><td colspan="5" class="empty">Belum ada daftar mata kuliah. Dengan daftar ini, laporan kelengkapan bisa menunjukkan mata kuliah yang belum punya RPS.</td></tr>
+              {/each}
+            </tbody>
+          </table>
+          {#if editable}
+            <div class="row-btns">
+              <button class="btn small" onclick={addMk}>+ Mata kuliah</button>
+              <button class="btn small" onclick={() => (pasteOpen = !pasteOpen)} aria-expanded={pasteOpen}>Tempel dari Excel…</button>
+            </div>
+            {#if pasteOpen}
+              <div class="paste">
+                <p class="note">Salin kolom <b>Kode, Nama, SKS, Semester</b> (urutan ini) dari Excel, lalu tempel di sini. Satu mata kuliah per baris; baris judul dilewati.</p>
+                <textarea rows="6" bind:value={pasteText} placeholder={'COM60004\tPemrograman Dasar\t3\t1'}></textarea>
+                <button class="btn small primary" onclick={pasteMk} disabled={!pasteText.trim()}>Tambahkan</button>
+              </div>
+            {/if}
+          {/if}
         {:else if !busy && signedIn}
           <p class="note">{admin ? 'Tambahkan prodi untuk mulai menyusun katalog.' : 'Belum ada katalog prodi. Hubungi admin.'}</p>
         {/if}
@@ -417,6 +485,24 @@
   }
   .s {
     width: 12rem;
+  }
+  .n {
+    width: 5rem;
+    text-align: center;
+  }
+  h3 .sub {
+    font-weight: 400;
+    margin-left: 0.4rem;
+  }
+  .row-btns {
+    display: flex;
+    gap: 0.4rem;
+  }
+  .paste {
+    display: grid;
+    gap: 0.4rem;
+    margin-top: 0.5rem;
+    justify-items: start;
   }
   .empty {
     color: var(--muted);

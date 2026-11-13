@@ -14,6 +14,7 @@
   import SortSelect from './SortSelect.svelte';
   import VersionDiffDialog from './VersionDiffDialog.svelte';
   import ProdiRekapDialog from './ProdiRekapDialog.svelte';
+  import KelengkapanDialog from './KelengkapanDialog.svelte';
   import { review, setReviewYears, REVIEW_CHOICES, reviewSince, isReviewDue } from './review.svelte.js';
   import { formatTanggal } from './model.js';
   import { notes, copyLink, markMentionsSeen, unseenMentions } from './comments.svelte.js';
@@ -991,6 +992,15 @@
     rekap = { title: folder || `${sops.length} RPS dipilih`, items: sops };
   }
 
+  // ---- Kelengkapan RPS: hasil Periksa, komentar, tinjauan, dan daftar mata kuliah katalog ----
+  let lengkap = $state(null);
+  function makeLengkap(list) {
+    const sops = sopsOf(list);
+    if (!sops.length) return ui.alert('Tidak ada RPS di pilihan ini.');
+    const folder = list.length === 1 && list[0].isFolder ? list[0].item.name : '';
+    lengkap = { title: folder || `${sops.length} RPS dipilih`, items: sops };
+  }
+
   // ---- Hak akses ----
   function openAccess(kind, item) {
     const up = kind === 'folders' ? parents.get(item.id) : folderOf(item);
@@ -1037,6 +1047,7 @@
       { head: `${list.length} item dipilih` },
       { label: 'Gabung jadi satu PDF…', icon: 'book', run: () => makeBook(list) },
       { label: 'Rekap CPL…', icon: 'grid', run: () => makeRekap(list) },
+      { label: 'Kelengkapan RPS…', icon: 'check', run: () => makeLengkap(list) },
       { sep: true },
       { label: `Pindahkan ${n} item…`, icon: 'move', run: () => startMove(own), disabled: !n },
       { label: 'Potong', icon: 'cut', hint: 'Ctrl+X', run: () => cut(own), disabled: !n },
@@ -1073,6 +1084,7 @@
       { sep: true },
       { label: 'Gabung isinya jadi satu PDF…', icon: 'book', run: () => makeBook([entryOf(f, true)]), disabled: !sopsOf([entryOf(f, true)]).length },
       { label: 'Rekap CPL isinya…', icon: 'grid', run: () => makeRekap([entryOf(f, true)]), disabled: !sopsOf([entryOf(f, true)]).length },
+      { label: 'Kelengkapan RPS isinya…', icon: 'check', run: () => makeLengkap([entryOf(f, true)]), disabled: !sopsOf([entryOf(f, true)]).length },
       { label: accessTip(f), icon: 'users', run: () => openAccess('folders', f) },
       ...(canEdit(f) ? [{ label: 'Ubah nama', icon: 'pencil', hint: 'F2', run: () => renameFolder(f) }] : []),
       ...(manage
@@ -1242,6 +1254,7 @@
       {:else}
         <button type="button" class="btn" onclick={() => makeBook(selRows)} title="Gabungkan RPS yang dipilih (termasuk isi folder) menjadi satu PDF berdaftar isi"><Icon name="book" size={14} /> Gabung PDF</button>
         <button type="button" class="btn" onclick={() => makeRekap(selRows)} title="Matriks mata kuliah × CPL dari RPS yang dipilih (termasuk isi folder)"><Icon name="grid" size={14} /> Rekap CPL</button>
+        <button type="button" class="btn" onclick={() => makeLengkap(selRows)} title="Laporan kelengkapan RPS yang dipilih (termasuk isi folder): hasil Periksa, komentar, dan mata kuliah katalog yang belum punya RPS"><Icon name="check" size={14} /> Kelengkapan</button>
         <button type="button" class="btn" disabled={!own.length} onclick={() => startMove(own)}><Icon name="move" size={14} /> Pindahkan</button>
         <button type="button" class="btn danger" disabled={!own.length} onclick={() => deleteMany(own)}><Icon name="trash" size={14} /> Hapus</button>
       {/if}
@@ -1704,6 +1717,20 @@
       openSop(s);
     }}
     onclose={() => (rekap = null)}
+  />
+{/if}
+
+{#if lengkap}
+  <KelengkapanDialog
+    open={true}
+    title={lengkap.title}
+    items={lengkap.items}
+    notes={openCount}
+    onopen={(s) => {
+      lengkap = null;
+      openSop(s);
+    }}
+    onclose={() => (lengkap = null)}
   />
 {/if}
 
