@@ -4,8 +4,6 @@
   import { app, persist, tabs, stash, newTabId, saveSession, loadSession } from './lib/store.svelte.js';
   import { emptyDocument, parseDocumentText, docTitle, importCatalog, setMeta } from './lib/model.js';
   import { applyDefaults } from './lib/appDefaults.svelte.js';
-  import CurriculumDialog from './lib/CurriculumDialog.svelte';
-  import AiDialog from './lib/AiDialog.svelte';
   import { sampleDocument } from './lib/sample.js';
   import { layoutDocument, pagesOf, PDF_PARTS } from './lib/layout.js';
   import { exportPdf, exportPdfBook, rpsFromPdf, PDF_PROTECT } from './lib/pdf.js';
@@ -24,7 +22,6 @@
   import { checkDocument } from './lib/validate.js';
   import { review } from './lib/review.svelte.js';
   import { connectHistory } from './lib/history.js';
-  import LibraryDialog from './lib/LibraryDialog.svelte';
   import { saveDoc, isBlank, getEntry } from './lib/library.js';
   import FacultyConflict from './lib/FacultyConflict.svelte';
   import CloseConfirm from './lib/CloseConfirm.svelte';
@@ -32,7 +29,6 @@
   import * as ui from './lib/ask.svelte.js';
   import * as Faculty from './lib/faculty.svelte.js';
   import { faculty } from './lib/faculty.svelte.js';
-  import AdminDialog from './lib/AdminDialog.svelte';
   import DocMetaDialog from './lib/DocMetaDialog.svelte';
 
   let toast = $state(null); // { msg, action, n }
@@ -653,6 +649,31 @@
 
   // Jawaban AI yang ditempel: dokumen baru tanpa berkas, atau (revise) pengganti dokumen aktif yang bisa di-Undo.
   let aiOpen = $state(false);
+
+  // Dialog besar (Pustaka, Admin, AI, Kurikulum) baru dimuat saat pertama kali dibuka agar aplikasi lebih cepat tampil.
+  // Setelah dimuat dialog tetap terpasang, jadi isiannya (folder, filter, dsb.) tidak hilang saat ditutup.
+  let LibraryDialog = $state(null);
+  let AdminDialog = $state(null);
+  let AiDialog = $state(null);
+  let CurriculumDialog = $state(null);
+  function loadDialog(load, set, close) {
+    load().then((m) => set(m.default)).catch(() => {
+      close();
+      notify('Bagian aplikasi ini gagal dimuat. Periksa koneksi internet, lalu coba lagi.');
+    });
+  }
+  $effect(() => {
+    if (libraryOpen && !LibraryDialog) loadDialog(() => import('./lib/LibraryDialog.svelte'), (c) => (LibraryDialog = c), () => (libraryOpen = false));
+  });
+  $effect(() => {
+    if (adminOpen && !AdminDialog) loadDialog(() => import('./lib/AdminDialog.svelte'), (c) => (AdminDialog = c), () => (adminOpen = false));
+  });
+  $effect(() => {
+    if (aiOpen && !AiDialog) loadDialog(() => import('./lib/AiDialog.svelte'), (c) => (AiDialog = c), () => (aiOpen = false));
+  });
+  $effect(() => {
+    if (curriculumOpen && !CurriculumDialog) loadDialog(() => import('./lib/CurriculumDialog.svelte'), (c) => (CurriculumDialog = c), () => (curriculumOpen = false));
+  });
   function loadPasted(text, revise = false) {
     try {
       const doc = parseDocumentText(text);
@@ -1622,8 +1643,8 @@
   {#if tabMenu}<ContextMenu x={tabMenu.x} y={tabMenu.y} items={tabMenu.items} onclose={() => (tabMenu = null)} />{/if}
   <CheckPanel bind:open={checkOpen} {issues} doc={app.doc} onjump={jumpTo} />
 
-  <AdminDialog bind:open={adminOpen} onnotify={notify} />
-  <LibraryDialog
+  {#if AdminDialog}<AdminDialog bind:open={adminOpen} onnotify={notify} />{/if}
+  {#if LibraryDialog}<LibraryDialog
     bind:open={libraryOpen}
     bind:tab={libraryTab}
     local={{
@@ -1661,9 +1682,9 @@
         openComment(sopId, cid);
       }
     }}
-  />
-  <AiDialog bind:open={aiOpen} docKey={tabs.active} onpaste={loadPasted} />
-  <CurriculumDialog bind:open={curriculumOpen} onimport={useCatalog} cansave={!empty} />
+  />{/if}
+  {#if AiDialog}<AiDialog bind:open={aiOpen} docKey={tabs.active} onpaste={loadPasted} />{/if}
+  {#if CurriculumDialog}<CurriculumDialog bind:open={curriculumOpen} onimport={useCatalog} cansave={!empty} />{/if}
   <FacultyConflict info={conflict} onchoice={chooseConflict} />
   <CloseConfirm info={closeAsk} onchoice={chooseClose} />
   <DocMetaDialog doc={app.doc} bind:open={metaOpen} onsave={saveMeta} />
