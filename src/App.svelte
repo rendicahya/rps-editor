@@ -1049,6 +1049,16 @@
     buildPdf();
   }
 
+  /** Cetak: pratinjau PDF dibuka, lalu dialog cetak browser langsung muncul. */
+  let pdfPrint = $state(false);
+  async function printPdf() {
+    if (pdfBusy || !(await reviewDone())) return;
+    pdfPrint = true;
+    pdfBook = null;
+    pdfSaved = null;
+    buildPdf();
+  }
+
   /** Menggabungkan beberapa RPS ({ json, title }) menjadi satu PDF berdaftar isi, lalu menampilkan pratinjaunya. */
   function makeBook(items, title) {
     if (pdfBusy) return;
@@ -1136,6 +1146,10 @@
     } else if (k === 'p' && e.shiftKey) {
       e.preventDefault();
       pdf();
+    } else if (k === 'p') {
+      // Cetak lewat PDF agar hasilnya sama dengan ekspor; saat pratinjau terbuka, dialognya sendiri yang mencetak.
+      e.preventDefault();
+      if (!pdfDoc) printPdf();
     } else if (k === 'f' || k === 'h') {
       e.preventDefault();
       findOpen = true;
@@ -1349,6 +1363,9 @@
             <button role="menuitem" onclick={() => ((exportOpen = false), pdf())}>
               <strong>PDF</strong><small>Pratinjau lalu unduh · Ctrl+Shift+P</small>
             </button>
+            <button role="menuitem" onclick={() => ((exportOpen = false), printPdf())}>
+              <strong>Cetak</strong><small>Langsung ke printer, sama dengan PDF · Ctrl+P</small>
+            </button>
             <button role="menuitem" onclick={() => ((exportOpen = false), exportDocxFile())}>
               <strong>Word (.docx)</strong><small>Tabel Word yang bisa diedit; bisa dibuka lagi di sini</small>
             </button>
@@ -1517,6 +1534,7 @@
 
   <PdfPreviewDialog
     bind:pdf={pdfDoc}
+    bind:printNow={pdfPrint}
     ondownload={() => !pdfBook && pdfSaved?.()}
     protect={pdfProtect}
     watermark={pdfWatermark}

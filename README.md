@@ -123,6 +123,8 @@ Sudah ada:
   Pilihan **Halaman** menentukan isi PDF: semua halaman (bawaan), **RPS tanpa Lembar Kerja** (sampul sampai tabel
   pertemuan), atau **Lembar Kerja saja**. Diingat per browser; PDF sebagian tetap membawa data RPS yang utuh sehingga
   bisa dibuka lagi di editor. Di PDF gabungan dengan "Lembar Kerja saja", RPS yang tidak punya Lembar Kerja dilewati.
+- **Cetak** (menu Ekspor, tombol di pratinjau PDF, atau Ctrl+P): mencetak lewat PDF sehingga hasilnya sama persis
+  dengan ekspor, termasuk pilihan Halaman dan Watermark. Di ponsel, PDF dibuka di tab baru untuk dicetak dari sana.
 - **PDF gabungan (kumpulan RPS)**: beberapa RPS digabung menjadi satu PDF, diawali halaman daftar isi (kode, mata
   kuliah, prodi, dan halaman tiap RPS; klik untuk melompat) dan bookmark per RPS. Dari Pustaka Daring: pilih RPS atau
   folder lalu **Gabung PDF** (isi folder dan subfoldernya ikut), atau klik kanan folder › **Gabung isinya jadi satu

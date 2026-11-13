@@ -5,9 +5,10 @@
 
   /**
    * pdf: objek jsPDF hasil exportPdf; pages: tata letak (cadangan bila browser tak bisa menampilkan PDF).
-   * protect, watermark: pilihan saat ini; onoptions({ protect?, watermark? }) membuat ulang PDF.
+   * printNow: true = langsung buka dialog cetak begitu PDF tampil (lalu kembali false).
+   * protect, watermark, part: pilihan saat ini; onoptions({ protect?, watermark?, part? }) membuat ulang PDF.
    */
-  let { pdf = $bindable(null), pages, filename, fontNote = '', ondownload, protect = 'none', watermark = '', part = 'all', busy = false, onoptions, onmeta, title = 'Pratinjau PDF' } = $props();
+  let { pdf = $bindable(null), printNow = $bindable(false), pages, filename, fontNote = '', ondownload, protect = 'none', watermark = '', part = 'all', busy = false, onoptions, onmeta, title = 'Pratinjau PDF' } = $props();
 
   // Watermark: '' (tanpa), salah satu WATERMARKS, atau 'custom' dengan teks bebas.
   let wmChoice = $state('');
@@ -70,6 +71,30 @@
     shown = !!pdf;
   });
 
+  // Cetak lewat penampil PDF browser di iframe pratinjau, sehingga hasil cetak sama persis dengan PDF.
+  let frame = $state();
+  let loaded = $state(false);
+  $effect(() => {
+    url;
+    loaded = false;
+  });
+  function print() {
+    if (busy || !url) return;
+    if (!inline) return window.open(url, '_blank', 'noopener'); // seluler: cetak dari penampil PDF di tab baru
+    try {
+      frame.contentWindow.focus();
+      frame.contentWindow.print();
+    } catch {
+      window.open(url, '_blank', 'noopener');
+    }
+  }
+  $effect(() => {
+    if (!printNow || busy || !url || (inline && !loaded)) return;
+    printNow = false;
+    // Penampil PDF butuh sesaat untuk merender halaman setelah iframe dimuat.
+    setTimeout(print, inline ? 400 : 0);
+  });
+
   function download() {
     const n = name.trim().replace(/[\\/:*?"<>|]+/g, '-').replace(/\.pdf$/i, '') || filename.replace(/\.pdf$/i, '');
     pdf.save(n + '.pdf');
@@ -78,7 +103,7 @@
   }
 </script>
 
-<dialog bind:this={dialog} class="dialog" use:dismiss onclose={() => (pdf = null)}>
+<dialog bind:this={dialog} class="dialog" use:dismiss onclose={() => ((pdf = null), (printNow = false))} onkeydown={(e) => (e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === 'p' && (e.preventDefault(), print())}>
   <header>
     <div>
       <h2>{title}</h2>
@@ -90,6 +115,7 @@
         <span>.pdf</span>
       </label>
       <button type="button" class="btn" onclick={() => (pdf = null)}>Kembali ke editor</button>
+      <button type="button" class="btn" disabled={busy} onclick={print} title="Cetak PDF ini lewat printer (Ctrl+P)">Cetak</button>
       <button type="button" class="btn primary" disabled={busy} onclick={download}>Unduh PDF</button>
     </div>
   </header>
@@ -138,7 +164,7 @@
   {/if}
   {#if url}
     {#if inline}
-      <iframe src={url + '#view=FitH'} title="Pratinjau PDF"></iframe>
+      <iframe bind:this={frame} src={url + '#view=FitH'} title="Pratinjau PDF" onload={() => (loaded = true)}></iframe>
     {:else}
       <div class="fallback">
         <p class="note">
